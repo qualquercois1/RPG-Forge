@@ -1,7 +1,7 @@
 import sqlite3
 
 def get_connection():
-    return sqlite3.connect('rpg.db', check_same_thread=False)
+    return sqlite3.connect('../rpg.db', check_same_thread=False)
 
 def create_users_table():
     conn = get_connection()

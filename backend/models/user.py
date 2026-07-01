@@ -15,13 +15,13 @@ class User:
             cursor.execute('INSERT INTO users (username, password) VALUES (?, ?)', (self.username, self.password))
             conn.commit()
             self.id = cursor.lastrowid
-            return True
+            return self
         except sqlite3.IntegrityError:
             print("Erro: Nome de usuário já existe.")
-            return False
+            return None
         except Exception as e:
             print(f"Ocorreu um erro ao salvar o usuário: {e}")
-            return False
+            return None
         finally:
             conn.close()
 

@@ -1,10 +1,18 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from database import create_tables
+from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from models.character import Character
 from controllers import auth_controller
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Iniciando o Servidor... Verificando o Banco de dados...")
+    create_tables()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
