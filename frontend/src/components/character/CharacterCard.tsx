@@ -24,10 +24,12 @@ export function CharacterCard({ character }: { character: Character }) {
         <div className="min-w-0 flex-1">
           <div className="font-display text-2xl leading-tight truncate">{character.name}</div>
           <div className="text-sm text-muted-foreground">
-            {character.race} · {character.classe}
+            {character.race} · {character.classe} · Nível {character.level || 1}
           </div>
-          <div className="mt-1 text-xs text-muted-foreground/80 flex items-center gap-1">
-            <User className="h-3 w-3" /> {character.region}
+          <div className="mt-2 text-xs text-primary flex items-center gap-1">
+            <span className="px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20">
+              Mesa: {character.table_name}
+            </span>
           </div>
         </div>
       </div>

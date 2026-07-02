@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { useCharacters } from "@/context/character-context";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { loginUser } = useCharacters();
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [error, setError] = useState("");
@@ -35,6 +37,7 @@ function LoginPage() {
       });
       const data = await response.json();
       if (response.ok) {
+        loginUser(data.user);
         navigate({ to: "/characters" });
       } else {
         setError(data.detail || "Erro ao entrar.");

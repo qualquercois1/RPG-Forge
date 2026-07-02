@@ -3,7 +3,7 @@ import { ArrowLeft, MapPin, Ruler, Cake, Palette, Scroll } from "lucide-react";
 import { useCharacters } from "@/context/character-context";
 import { AttributeBox } from "@/components/character/AttributeBox";
 import { AttributeRadar } from "@/components/character/AttributeRadar";
-import { InventoryDrawer } from "@/components/inventory/InventoryDrawer";
+import { InventoryCard } from "@/components/inventory/InventoryCard";
 import { ATTR_ORDER } from "@/lib/mock-data";
 import { Card } from "@/components/ui/card";
 import { useState, useEffect } from "react";
@@ -21,16 +21,34 @@ export const Route = createFileRoute("/character/$id")({
 function CharacterSheet() {
   const { id } = Route.useParams();
   const charId = parseInt(id, 10);
-  const { getCharacter, updateCharacter } = useCharacters();
-  const character = getCharacter(charId);
+  const { characters, fetchInventory, updateCharacter, loading } = useCharacters();
+  const character = characters.find((c) => c.id === charId);
 
   const [lore, setLore] = useState(character?.lore ?? "");
   useEffect(() => {
     setLore(character?.lore ?? "");
   }, [character?.id, character?.lore]);
 
+  useEffect(() => {
+    if (character) {
+      fetchInventory(charId);
+    }
+  }, [charId, character, fetchInventory]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full grid place-items-center text-muted-foreground font-mono">
+        Carregando ficha do herói...
+      </div>
+    );
+  }
+
   if (!character) {
-    throw notFound();
+    return (
+      <div className="min-h-screen w-full grid place-items-center text-muted-foreground font-mono">
+        Personagem não encontrado.
+      </div>
+    );
   }
 
   const saveLore = () => {
@@ -57,18 +75,20 @@ function CharacterSheet() {
               {character.race}
             </span>
           </div>
-          <InventoryDrawer characterId={character.id} />
+          <div className="w-10 h-1" /> {/* Spacer */}
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-6">
-        {/* Left column — Identidade */}
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Left column — Identidade & Lore */}
         <div className="space-y-6">
           <Card className="p-6">
             <div className="text-xs uppercase tracking-[0.3em] text-primary mb-1">Identidade</div>
             <h2 className="font-display text-3xl mb-4">{character.name}</h2>
 
             <dl className="grid grid-cols-1 gap-3 text-sm">
+              <Row icon={Scroll} label="Mesa" value={character.table_name} />
+              <Row icon={Scroll} label="Nível" value={String(character.level)} />
               <Row icon={MapPin} label="Origem" value={character.region} />
               <Row icon={Cake} label="Idade" value={`${character.age} anos`} />
               <Row icon={Ruler} label="Altura" value={character.height} />
@@ -86,7 +106,7 @@ function CharacterSheet() {
               value={lore}
               onChange={(e) => setLore(e.target.value)}
               onBlur={saveLore}
-              rows={7}
+              rows={5}
               className="w-full rounded-md bg-input/40 border border-border p-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring resize-none"
             />
             <p className="mt-2 text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -95,11 +115,11 @@ function CharacterSheet() {
           </Card>
         </div>
 
-        {/* Right column — Atributos */}
+        {/* Middle column — Atributos & Distribuição */}
         <div className="space-y-6">
           <Card className="p-6">
             <div className="text-xs uppercase tracking-[0.3em] text-primary mb-4">Atributos</div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               {ATTR_ORDER.map((k) => (
                 <AttributeBox key={k} k={k} value={character.attributes[k]} />
               ))}
@@ -112,6 +132,11 @@ function CharacterSheet() {
             </div>
             <AttributeRadar attributes={character.attributes} />
           </Card>
+        </div>
+
+        {/* Right column — Inventário */}
+        <div>
+          <InventoryCard characterId={character.id} />
         </div>
       </div>
     </div>

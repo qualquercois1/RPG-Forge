@@ -16,71 +16,46 @@ def create_users_table():
     conn.commit()
     conn.close()
 
-def create_mesas_table():
+def create_tables_table():
     conn = get_connection()
     cursor = conn.cursor()
-    
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS mesas (
+        CREATE TABLE IF NOT EXISTS tables (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            description TEXT
+            game_master_id INTEGER NOT NULL,
+            FOREIGN KEY (game_master_id) REFERENCES users (id) ON DELETE CASCADE
         )
     ''')
-
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS user_mesas (
-            user_id INTEGER NOT NULL,
-            mesa_id INTEGER NOT NULL,
-            is_mestre INTEGER DEFAULT 0,
-            PRIMARY KEY (user_id, mesa_id),
-            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-            FOREIGN KEY (mesa_id) REFERENCES mesas (id) ON DELETE CASCADE
-        )
-    ''')
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS mesa_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            mesa_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            description TEXT,
-            item_type TEXT DEFAULT 'Geral',
-            weight REAL DEFAULT 0.0,
-            rarity TEXT DEFAULT 'Comum',
-            FOREIGN KEY (mesa_id) REFERENCES mesas (id) ON DELETE CASCADE
-        )
-    ''')
-    
     conn.commit()
     conn.close()
 
 def create_characters_table():
     conn = get_connection()
     cursor = conn.cursor()
-    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS characters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            mesa_id INTEGER NOT NULL,
+            table_id INTEGER NOT NULL,
             name TEXT NOT NULL,
-            age INTEGER,
-            eye_color TEXT,
-            skin_color TEXT,
-            classe TEXT,
-            height REAL,
-            physical TEXT,
+            classe TEXT NOT NULL,
+            level INTEGER DEFAULT 1,
             race TEXT,
             region TEXT,
-            attribute_strength INTEGER,
-            attribute_agility INTEGER,
-            attribute_vitality INTEGER,
-            attribute_intelligence INTEGER,
-            attribute_survival INTEGER,
-            attribute_magic INTEGER,
+            age INTEGER,
+            height TEXT,
+            physical TEXT,
+            color TEXT,
+            lore TEXT,
+            str INTEGER DEFAULT 5,
+            agi INTEGER DEFAULT 5,
+            int INTEGER DEFAULT 5,
+            vit INTEGER DEFAULT 5,
+            sur INTEGER DEFAULT 5,
+            mag INTEGER DEFAULT 5,
             FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-            FOREIGN KEY (mesa_id) REFERENCES mesas (id) ON DELETE CASCADE
+            FOREIGN KEY (table_id) REFERENCES tables (id) ON DELETE CASCADE
         )
     ''')
     conn.commit()
@@ -93,11 +68,11 @@ def create_inventory_table():
         CREATE TABLE IF NOT EXISTS inventory (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             character_id INTEGER NOT NULL,
-            mesa_item_id INTEGER NOT NULL,
+            item_name TEXT NOT NULL,
+            description TEXT,
+            weight REAL DEFAULT 0.0,
             quantity INTEGER DEFAULT 1,
-            is_equipped INTEGER DEFAULT 0,
-            FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE,
-            FOREIGN KEY (mesa_item_id) REFERENCES mesa_items (id) ON DELETE CASCADE
+            FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
         )
     ''')
     conn.commit()
@@ -105,6 +80,6 @@ def create_inventory_table():
 
 def create_tables():
     create_users_table()
-    create_mesas_table()
+    create_tables_table()
     create_characters_table()
     create_inventory_table()
