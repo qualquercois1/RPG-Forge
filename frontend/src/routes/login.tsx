@@ -20,10 +20,28 @@ function LoginPage() {
   const navigate = useNavigate();
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
+  const [error, setError] = useState("");
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    navigate({ to: "/characters" });
+    setError("");
+    try {
+      const response = await fetch("http://localhost:8000/api/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username: user, password: pass }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        navigate({ to: "/characters" });
+      } else {
+        setError(data.detail || "Erro ao entrar.");
+      }
+    } catch (error) {
+      setError("Erro de conexão com o servidor.");
+    }
   };
 
   return (
@@ -56,6 +74,7 @@ function LoginPage() {
             <Label htmlFor="pass" className="text-xs uppercase tracking-widest">Senha</Label>
             <Input id="pass" type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="••••••••" />
           </div>
+          {error && (<p className="text-sm text-destructive text-center">{error}</p>)}
           <Button type="submit" className="w-full font-semibold">Entrar</Button>
           <div className="text-center text-xs text-muted-foreground">
             Novo por aqui?{" "}
