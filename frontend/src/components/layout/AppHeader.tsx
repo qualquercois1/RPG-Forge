@@ -17,7 +17,7 @@ export function AppHeader() {
     <header className="w-full border-b border-border bg-card/50 backdrop-blur sticky top-0 z-30">
       <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
         <div className="flex items-center gap-6">
-          <Link to="/characters" className="flex items-center gap-2">
+          <Link to="/tables" className="flex items-center gap-2">
             <div className="grid place-items-center h-9 w-9 rounded-md bg-primary/10 text-primary border border-primary/30 neon-border">
               <Swords className="h-5 w-5" />
             </div>

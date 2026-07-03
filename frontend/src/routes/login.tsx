@@ -38,7 +38,7 @@ function LoginPage() {
       const data = await response.json();
       if (response.ok) {
         loginUser(data.user);
-        navigate({ to: "/characters" });
+        navigate({ to: "/tables" });
       } else {
         setError(data.detail || "Erro ao entrar.");
       }

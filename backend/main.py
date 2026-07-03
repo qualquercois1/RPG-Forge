@@ -3,8 +3,8 @@ from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from database import create_tables, get_connection
 from contextlib import asynccontextmanager
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, Field
+from typing import Optional, List
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -22,14 +22,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from pydantic import BaseModel, Field
-
 class UserAuth(BaseModel):
     username: str
     password: str
 
 class TableCreate(BaseModel):
     name: str
+
+class StartingItem(BaseModel):
+    item_name: str
+    description: str
+    weight: float = 0.0
+    quantity: int = 1
 
 class CharacterCreate(BaseModel):
     table_id: int
@@ -49,6 +53,10 @@ class CharacterCreate(BaseModel):
     vit: int = 5
     sur: int = 5
     mag: int = 5
+    alive: int = 1
+    hp: Optional[int] = None
+    max_hp: Optional[int] = None
+    starting_items: Optional[List[StartingItem]] = []
 
     class Config:
         populate_by_name = True
@@ -56,12 +64,31 @@ class CharacterCreate(BaseModel):
 class CharacterUpdate(BaseModel):
     lore: Optional[str] = None
     level: Optional[int] = None
+    hp: Optional[int] = None
+    max_hp: Optional[int] = None
+    alive: Optional[int] = None
 
 class InventoryItemCreate(BaseModel):
     item_name: str
     description: str
     weight: float = 0.0
     quantity: int = 1
+
+class TableItemCreate(BaseModel):
+    item_name: str
+    description: str
+    weight: float = 0.0
+
+class AssignTableItem(BaseModel):
+    character_id: int
+    quantity: int = 1
+
+class SessionCreate(BaseModel):
+    name: str
+    description: Optional[str] = ""
+
+class SessionLogCreate(BaseModel):
+    event_text: str
 
 @app.post("/api/register")
 def register(user_auth: UserAuth):
@@ -125,7 +152,7 @@ def get_characters(x_user_id: str = Header(...)):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT c.id, c.user_id, c.table_id, c.name, c.classe, c.level, c.race, c.region, c.age, c.height, c.physical, c.color, c.lore,
-               c.str, c.agi, c.int, c.vit, c.sur, c.mag, t.name as table_name
+               c.str, c.agi, c.int, c.vit, c.sur, c.mag, c.alive, c.hp, c.max_hp, t.name as table_name
         FROM characters c
         JOIN tables t ON c.table_id = t.id
         WHERE c.user_id = ?
@@ -139,7 +166,7 @@ def get_characters(x_user_id: str = Header(...)):
             "id": r[0], "user_id": r[1], "table_id": r[2], "name": r[3], "classe": r[4], "level": r[5],
             "race": r[6], "region": r[7], "age": r[8], "height": r[9], "physical": r[10], "color": r[11], "lore": r[12],
             "attributes": {"str": r[13], "agi": r[14], "int": r[15], "vit": r[16], "sur": r[17], "mag": r[18]},
-            "table_name": r[19]
+            "alive": r[19], "hp": r[20], "max_hp": r[21], "table_name": r[22]
         })
     return chars
 
@@ -149,9 +176,10 @@ def get_character(char_id: int):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT c.id, c.user_id, c.table_id, c.name, c.classe, c.level, c.race, c.region, c.age, c.height, c.physical, c.color, c.lore,
-               c.str, c.agi, c.int, c.vit, c.sur, c.mag, t.name as table_name
+               c.str, c.agi, c.int, c.vit, c.sur, c.mag, c.alive, c.hp, c.max_hp, t.name as table_name, u.username
         FROM characters c
         JOIN tables t ON c.table_id = t.id
+        JOIN users u ON c.user_id = u.id
         WHERE c.id = ?
     """, (char_id,))
     r = cursor.fetchone()
@@ -162,25 +190,81 @@ def get_character(char_id: int):
         "id": r[0], "user_id": r[1], "table_id": r[2], "name": r[3], "classe": r[4], "level": r[5],
         "race": r[6], "region": r[7], "age": r[8], "height": r[9], "physical": r[10], "color": r[11], "lore": r[12],
         "attributes": {"str": r[13], "agi": r[14], "int": r[15], "vit": r[16], "sur": r[17], "mag": r[18]},
-        "table_name": r[19]
+        "alive": r[19], "hp": r[20], "max_hp": r[21], "table_name": r[22], "owner_username": r[23]
     }
+
+@app.get("/api/tables/{table_id}/characters")
+def get_table_characters(table_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT c.id, c.user_id, c.table_id, c.name, c.classe, c.level, c.race, c.region, c.age, c.height, c.physical, c.color, c.lore,
+               c.str, c.agi, c.int, c.vit, c.sur, c.mag, c.alive, c.hp, c.max_hp, u.username
+        FROM characters c
+        JOIN users u ON c.user_id = u.id
+        WHERE c.table_id = ?
+    """, (table_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    
+    chars = []
+    for r in rows:
+        chars.append({
+            "id": r[0], "user_id": r[1], "table_id": r[2], "name": r[3], "classe": r[4], "level": r[5],
+            "race": r[6], "region": r[7], "age": r[8], "height": r[9], "physical": r[10], "color": r[11], "lore": r[12],
+            "attributes": {"str": r[13], "agi": r[14], "int": r[15], "vit": r[16], "sur": r[17], "mag": r[18]},
+            "alive": r[19], "hp": r[20], "max_hp": r[21], "owner_username": r[22]
+        })
+    return chars
 
 @app.post("/api/characters")
 def create_character(char: CharacterCreate, x_user_id: str = Header(...)):
     conn = get_connection()
     cursor = conn.cursor()
+    uid = int(x_user_id)
     try:
+        # 1. Obter game_master_id da mesa
+        cursor.execute("SELECT game_master_id FROM tables WHERE id = ?", (char.table_id,))
+        row_table = cursor.fetchone()
+        if not row_table:
+            raise HTTPException(status_code=404, detail="Mesa não encontrada.")
+        
+        gm_id = row_table[0]
+
+        # 2. Se NÃO for o mestre (GM), verificar se já possui um personagem VIVO nesta mesa
+        if uid != gm_id:
+            cursor.execute("SELECT count(*) FROM characters WHERE user_id = ? AND table_id = ? AND alive = 1", (uid, char.table_id))
+            count = cursor.fetchone()[0]
+            if count > 0:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="Você já possui um personagem VIVO nesta mesa. Só é permitido um por jogador até que ele morra."
+                )
+
+        # 3. Definir Vida (HP) baseado na Vitalidade se não fornecido
+        max_hp = char.max_hp if char.max_hp is not None else char.vit * 10
+        hp = char.hp if char.hp is not None else max_hp
+
         cursor.execute("""
             INSERT INTO characters (
                 user_id, table_id, name, classe, level, race, region, age, height, physical, color, lore,
-                str, agi, int, vit, sur, mag
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                str, agi, int, vit, sur, mag, alive, hp, max_hp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            int(x_user_id), char.table_id, char.name, char.classe, char.level, char.race, char.region, char.age, char.height, char.physical, char.color, char.lore,
-            char.strength, char.agi, char.intel, char.vit, char.sur, char.mag
+            uid, char.table_id, char.name, char.classe, char.level, char.race, char.region, char.age, char.height, char.physical, char.color, char.lore,
+            char.strength, char.agi, char.intel, char.vit, char.sur, char.mag, char.alive, hp, max_hp
         ))
         conn.commit()
         char_id = cursor.lastrowid
+
+        if char.starting_items:
+            for it in char.starting_items:
+                cursor.execute("""
+                    INSERT INTO inventory (character_id, item_name, description, weight, quantity)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (char_id, it.item_name, it.description, it.weight, it.quantity))
+            conn.commit()
+
         return {"id": char_id, "message": "Personagem criado com sucesso."}
     finally:
         conn.close()
@@ -194,6 +278,19 @@ def update_character(char_id: int, char_up: CharacterUpdate):
             cursor.execute("UPDATE characters SET lore = ? WHERE id = ?", (char_up.lore, char_id))
         if char_up.level is not None:
             cursor.execute("UPDATE characters SET level = ? WHERE id = ?", (char_up.level, char_id))
+        if char_up.hp is not None:
+            hp_val = char_up.hp
+            # Se a vida chegar a 0, define vivo como falso (0) automaticamente
+            alive_val = 0 if hp_val <= 0 else 1
+            if char_up.alive is not None:
+                alive_val = char_up.alive
+            cursor.execute("UPDATE characters SET hp = ?, alive = ? WHERE id = ?", (hp_val, alive_val, char_id))
+        elif char_up.alive is not None:
+            cursor.execute("UPDATE characters SET alive = ? WHERE id = ?", (char_up.alive, char_id))
+        
+        if char_up.max_hp is not None:
+            cursor.execute("UPDATE characters SET max_hp = ? WHERE id = ?", (char_up.max_hp, char_id))
+
         conn.commit()
         return {"message": "Personagem atualizado com sucesso."}
     finally:
@@ -227,11 +324,21 @@ def add_inventory_item(char_id: int, item: InventoryItemCreate):
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("INSERT INTO inventory (character_id, item_name, description, weight, quantity) VALUES (?, ?, ?, ?, ?)", 
-                       (char_id, item.item_name, item.description, item.weight, item.quantity))
-        conn.commit()
-        item_id = cursor.lastrowid
-        return {"id": item_id, "item_name": item.item_name, "description": item.description, "weight": item.weight, "quantity": item.quantity}
+        # Check if item with same name exists for this character
+        cursor.execute("SELECT id, quantity FROM inventory WHERE character_id = ? AND item_name = ?", (char_id, item.item_name))
+        row = cursor.fetchone()
+        if row:
+            inv_id, qty = row
+            new_qty = qty + item.quantity
+            cursor.execute("UPDATE inventory SET quantity = ? WHERE id = ?", (new_qty, inv_id))
+            conn.commit()
+            return {"id": inv_id, "item_name": item.item_name, "description": item.description, "weight": item.weight, "quantity": new_qty}
+        else:
+            cursor.execute("INSERT INTO inventory (character_id, item_name, description, weight, quantity) VALUES (?, ?, ?, ?, ?)", 
+                           (char_id, item.item_name, item.description, item.weight, item.quantity))
+            conn.commit()
+            item_id = cursor.lastrowid
+            return {"id": item_id, "item_name": item.item_name, "description": item.description, "weight": item.weight, "quantity": item.quantity}
     finally:
         conn.close()
 
@@ -243,5 +350,135 @@ def delete_inventory_item(item_id: int):
         cursor.execute("DELETE FROM inventory WHERE id = ?", (item_id,))
         conn.commit()
         return {"message": "Item removido do inventário."}
+    finally:
+        conn.close()
+
+# --- SESSIONS & EVENT LOGS ENDPOINTS ---
+
+@app.get("/api/tables/{table_id}/sessions")
+def get_sessions(table_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, table_id, name, description, created_at FROM sessions WHERE table_id = ? ORDER BY id DESC", (table_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "table_id": r[1], "name": r[2], "description": r[3], "created_at": r[4]} for r in rows]
+
+@app.post("/api/tables/{table_id}/sessions")
+def create_session(table_id: int, session: SessionCreate):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO sessions (table_id, name, description) VALUES (?, ?, ?)", (table_id, session.name, session.description))
+        conn.commit()
+        session_id = cursor.lastrowid
+        return {"id": session_id, "table_id": table_id, "name": session.name, "description": session.description}
+    finally:
+        conn.close()
+
+@app.get("/api/sessions/{session_id}/logs")
+def get_session_logs(session_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, session_id, user_id, username, event_text, created_at FROM session_logs WHERE session_id = ? ORDER BY id ASC", (session_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "session_id": r[1], "user_id": r[2], "username": r[3], "event_text": r[4], "created_at": r[5]} for r in rows]
+
+@app.post("/api/sessions/{session_id}/logs")
+def create_session_log(session_id: int, log: SessionLogCreate, x_user_id: str = Header(...)):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # Obter nome do usuário
+        cursor.execute("SELECT username FROM users WHERE id = ?", (int(x_user_id),))
+        row = cursor.fetchone()
+        username = row[0] if row else "Desconhecido"
+
+        cursor.execute("INSERT INTO session_logs (session_id, user_id, username, event_text) VALUES (?, ?, ?, ?)", 
+                       (session_id, int(x_user_id), username, log.event_text))
+        conn.commit()
+        log_id = cursor.lastrowid
+        return {"id": log_id, "session_id": session_id, "user_id": int(x_user_id), "username": username, "event_text": log.event_text}
+    finally:
+        conn.close()
+
+# --- TABLE ITEMS (GM TEMPLATES) ENDPOINTS ---
+
+@app.get("/api/tables/{table_id}/items")
+def get_table_items(table_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, table_id, item_name, description, weight FROM table_items WHERE table_id = ?", (table_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "table_id": r[1], "item_name": r[2], "description": r[3], "weight": r[4]} for r in rows]
+
+@app.post("/api/tables/{table_id}/items")
+def create_table_item(table_id: int, item: TableItemCreate):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO table_items (table_id, item_name, description, weight) VALUES (?, ?, ?, ?)",
+                       (table_id, item.item_name, item.description, item.weight))
+        conn.commit()
+        item_id = cursor.lastrowid
+        return {"id": item_id, "table_id": table_id, "item_name": item.item_name, "description": item.description, "weight": item.weight}
+    finally:
+        conn.close()
+
+@app.post("/api/tables/{table_id}/items/{item_id}/assign")
+def assign_table_item(table_id: int, item_id: int, assign: AssignTableItem):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT item_name, description, weight FROM table_items WHERE id = ? AND table_id = ?", (item_id, table_id))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Item da mesa não encontrado.")
+        
+        item_name, description, weight = row
+
+        # Check if item with same name exists for this character
+        cursor.execute("SELECT id, quantity FROM inventory WHERE character_id = ? AND item_name = ?", (assign.character_id, item_name))
+        row_inv = cursor.fetchone()
+        if row_inv:
+            inv_id, qty = row_inv
+            new_qty = qty + assign.quantity
+            cursor.execute("UPDATE inventory SET quantity = ? WHERE id = ?", (new_qty, inv_id))
+            conn.commit()
+            return {"id": inv_id, "character_id": assign.character_id, "item_name": item_name, "description": description, "weight": weight, "quantity": new_qty}
+        else:
+            cursor.execute("""
+                INSERT INTO inventory (character_id, item_name, description, weight, quantity)
+                VALUES (?, ?, ?, ?, ?)
+            """, (assign.character_id, item_name, description, weight, assign.quantity))
+            conn.commit()
+            inv_id = cursor.lastrowid
+            return {"id": inv_id, "character_id": assign.character_id, "item_name": item_name, "description": description, "weight": weight, "quantity": assign.quantity}
+    finally:
+        conn.close()
+
+@app.delete("/api/table-items/{item_id}")
+def delete_table_item(item_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM table_items WHERE id = ?", (item_id,))
+        conn.commit()
+        return {"message": "Item removido da lista da mesa."}
+    finally:
+        conn.close()
+
+# --- DELETE SESSION LOG ENTRY ---
+
+@app.delete("/api/session-logs/{log_id}")
+def delete_session_log(log_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM session_logs WHERE id = ?", (log_id,))
+        conn.commit()
+        return {"message": "Mensagem do diário removida."}
     finally:
         conn.close()

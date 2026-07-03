@@ -50,6 +50,12 @@ function ForgePage() {
   const [region, setRegion] = useState("");
   const [lore, setLore] = useState("");
   const [tableId, setTableId] = useState<string>(tables[0]?.id ? String(tables[0].id) : "");
+  const [error, setError] = useState("");
+  const [startingItems, setStartingItems] = useState<{ item_name: string; description: string; weight: number; quantity: number }[]>([]);
+  const [startingItemName, setStartingItemName] = useState("");
+  const [startingItemDesc, setStartingItemDesc] = useState("");
+  const [startingItemWeight, setStartingItemWeight] = useState("1.0");
+  const [startingItemQty, setStartingItemQty] = useState("1");
   const [attrs, setAttrs] = useState<Attributes>({
     str: 5, agi: 5, int: 5, vit: 5, sur: 5, mag: 5,
   });
@@ -71,11 +77,35 @@ function ForgePage() {
     setAttrs((prev) => ({ ...prev, [k]: clamped }));
   };
 
+  const handleAddStartingItem = () => {
+    if (!startingItemName.trim()) return;
+    const w = parseFloat(startingItemWeight) || 0.0;
+    const q = parseInt(startingItemQty, 10) || 1;
+    setStartingItems((prev) => [
+      ...prev,
+      {
+        item_name: startingItemName.trim(),
+        description: startingItemDesc.trim(),
+        weight: w,
+        quantity: q,
+      },
+    ]);
+    setStartingItemName("");
+    setStartingItemDesc("");
+    setStartingItemWeight("1.0");
+    setStartingItemQty("1");
+  };
+
+  const handleRemoveStartingItem = (index: number) => {
+    setStartingItems((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
   const valid = total === TOTAL_POINTS && name.trim().length > 0 && tableId !== "";
 
   const submit = async () => {
     if (!valid) return;
-    const success = await addCharacter({
+    setError("");
+    const res = await addCharacter({
       table_id: parseInt(tableId),
       name: name.trim(),
       race,
@@ -92,10 +122,16 @@ function ForgePage() {
       vit: attrs.vit,
       sur: attrs.sur,
       mag: attrs.mag,
-      level: 1
+      level: 1,
+      alive: 1,
+      hp: attrs.vit * 10,
+      max_hp: attrs.vit * 10,
+      starting_items: startingItems
     });
-    if (success) {
+    if (res.success) {
       navigate({ to: "/characters" });
+    } else {
+      setError(res.error || "Erro ao criar personagem.");
     }
   };
 
@@ -187,6 +223,88 @@ function ForgePage() {
                 className="w-full rounded-md bg-input/50 border border-border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </Card>
+
+            <Card className="p-6">
+              <h2 className="font-display text-2xl mb-4">Inventário Inicial (Opcional)</h2>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-2 border border-border bg-card/40 p-3 rounded-lg">
+                  <div className="col-span-2">
+                    <Label className="text-[10px] uppercase">Nome do Item</Label>
+                    <Input
+                      placeholder="Ex: Espada Iniciante"
+                      value={startingItemName}
+                      onChange={(e) => setStartingItemName(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-[10px] uppercase">Descrição</Label>
+                    <Input
+                      placeholder="Ex: Uma espada de ferro simples"
+                      value={startingItemDesc}
+                      onChange={(e) => setStartingItemDesc(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] uppercase font-mono">Peso (kg)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      value={startingItemWeight}
+                      onChange={(e) => setStartingItemWeight(e.target.value)}
+                      className="h-8 text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] uppercase font-mono">Qtd</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={startingItemQty}
+                      onChange={(e) => setStartingItemQty(e.target.value)}
+                      className="h-8 text-xs font-mono"
+                    />
+                  </div>
+                  <div className="col-span-2 pt-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleAddStartingItem}
+                      className="w-full h-8 text-xs font-semibold"
+                    >
+                      Adicionar Item
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 max-h-[150px] overflow-y-auto pr-1">
+                  {startingItems.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic text-center py-2">Sem itens adicionados.</p>
+                  ) : (
+                    startingItems.map((it, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-xs p-2 rounded bg-secondary/50 border border-border">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold truncate">{it.item_name}</div>
+                          {it.description && <div className="text-[10px] text-muted-foreground truncate">{it.description}</div>}
+                          <div className="text-[9px] text-muted-foreground/80 font-mono mt-0.5">
+                            {it.weight}kg × {it.quantity}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveStartingItem(idx)}
+                          className="text-[10px] text-destructive hover:underline ml-2"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </Card>
           </div>
 
           {/* Right Column: Atributos */}
@@ -229,6 +347,10 @@ function ForgePage() {
                 Cada atributo aceita valores de 0 a 10. O total deve ser exatamente {TOTAL_POINTS}.
               </p>
             </Card>
+
+            {error && (
+              <p className="text-sm text-destructive text-right font-medium">{error}</p>
+            )}
 
             <div className="flex justify-end">
               <Button size="lg" disabled={!valid} onClick={submit} className="w-full font-semibold">

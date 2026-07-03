@@ -10,12 +10,17 @@ import { CapacityBar } from "./CapacityBar";
 export function InventoryCard({ characterId }: { characterId: number }) {
   const {
     characters,
+    tables,
+    user,
     inventoryByCharacter,
     addInventoryItem,
     deleteInventoryItem,
   } = useCharacters();
 
   const character = characters.find((c) => c.id === characterId);
+  const table = tables.find((t) => t.id === character?.table_id);
+  const isGM = table?.game_master_id === user?.id;
+
   const items = inventoryByCharacter[characterId] ?? [];
   
   const [name, setName] = useState("");
@@ -64,7 +69,7 @@ export function InventoryCard({ characterId }: { characterId: number }) {
               key={it.id}
               className="group rounded-lg border border-border bg-card/40 p-3 flex items-start justify-between gap-3 hover:bg-card/75 transition-all"
             >
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="font-medium text-sm text-foreground truncate">{it.item_name}</div>
                 {it.description && (
                   <div className="text-xs text-muted-foreground mt-0.5 leading-normal">
@@ -82,92 +87,96 @@ export function InventoryCard({ characterId }: { characterId: number }) {
                     {it.weight}kg × {it.quantity}
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => deleteInventoryItem(characterId, it.id)}
-                  className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {isGM && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => deleteInventoryItem(characterId, it.id)}
+                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
           ))
         )}
       </div>
 
-      <div className="border-t border-border pt-4">
-        {open ? (
-          <form onSubmit={handleAdd} className="space-y-3">
-            <div>
-              <Label htmlFor="itemName" className="text-xs uppercase tracking-widest">
-                Nome do Item
-              </Label>
-              <Input
-                id="itemName"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ex: Espada de Ferro, Poção, etc."
-                required
-              />
-            </div>
-            <div>
-              <Label htmlFor="itemDesc" className="text-xs uppercase tracking-widest">
-                Descrição / Notas
-              </Label>
-              <Input
-                id="itemDesc"
-                value={desc}
-                onChange={(e) => setDesc(e.target.value)}
-                placeholder="Ex: Causa +2 de dano físico."
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-2">
+      {isGM && (
+        <div className="border-t border-border pt-4">
+          {open ? (
+            <form onSubmit={handleAdd} className="space-y-3">
               <div>
-                <Label htmlFor="itemWeight" className="text-xs uppercase tracking-widest">
-                  Peso Unitário (kg)
+                <Label htmlFor="itemName" className="text-xs uppercase tracking-widest">
+                  Nome do Item
                 </Label>
                 <Input
-                  id="itemWeight"
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  value={weight}
-                  onChange={(e) => setWeight(e.target.value)}
+                  id="itemName"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ex: Espada de Ferro, Poção, etc."
                   required
                 />
               </div>
               <div>
-                <Label htmlFor="itemQty" className="text-xs uppercase tracking-widest">
-                  Quantidade
+                <Label htmlFor="itemDesc" className="text-xs uppercase tracking-widest">
+                  Descrição / Notas
                 </Label>
                 <Input
-                  id="itemQty"
-                  type="number"
-                  min="1"
-                  value={qty}
-                  onChange={(e) => setQty(e.target.value)}
-                  required
+                  id="itemDesc"
+                  value={desc}
+                  onChange={(e) => setDesc(e.target.value)}
+                  placeholder="Ex: Causa +2 de dano físico."
                 />
               </div>
-            </div>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label htmlFor="itemWeight" className="text-xs uppercase tracking-widest">
+                    Peso Unitário (kg)
+                  </Label>
+                  <Input
+                    id="itemWeight"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={weight}
+                    onChange={(e) => setWeight(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="itemQty" className="text-xs uppercase tracking-widest">
+                    Quantidade
+                  </Label>
+                  <Input
+                    id="itemQty"
+                    type="number"
+                    min="1"
+                    value={qty}
+                    onChange={(e) => setQty(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
 
-            <div className="flex gap-2 justify-end pt-1">
-              <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" size="sm">
-                Adicionar
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <Button onClick={() => setOpen(true)} className="w-full" variant="outline">
-            <Plus className="h-4 w-4" /> Adicionar Item
-          </Button>
-        )}
-      </div>
+              <div className="flex gap-2 justify-end pt-1">
+                <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" size="sm">
+                  Adicionar
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <Button onClick={() => setOpen(true)} className="w-full" variant="outline">
+              <Plus className="h-4 w-4" /> Adicionar Item
+            </Button>
+          )}
+        </div>
+      )}
     </Card>
   );
 }

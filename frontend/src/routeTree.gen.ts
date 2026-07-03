@@ -13,11 +13,11 @@ import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as TableIdRouteImport } from './routes/table.$id'
 import { Route as CharacterIdRouteImport } from './routes/character.$id'
 import { Route as AppTablesRouteImport } from './routes/_app.tables'
 import { Route as AppForgeRouteImport } from './routes/_app.forge'
 import { Route as AppCharactersRouteImport } from './routes/_app.characters'
+import { Route as AppTableIdRouteImport } from './routes/_app.table.$id'
 
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
@@ -36,11 +36,6 @@ const AppRoute = AppRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TableIdRoute = TableIdRouteImport.update({
-  id: '/table/$id',
-  path: '/table/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CharacterIdRoute = CharacterIdRouteImport.update({
@@ -63,6 +58,11 @@ const AppCharactersRoute = AppCharactersRouteImport.update({
   path: '/characters',
   getParentRoute: () => AppRoute,
 } as any)
+const AppTableIdRoute = AppTableIdRouteImport.update({
+  id: '/table/$id',
+  path: '/table/$id',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -72,7 +72,7 @@ export interface FileRoutesByFullPath {
   '/forge': typeof AppForgeRoute
   '/tables': typeof AppTablesRoute
   '/character/$id': typeof CharacterIdRoute
-  '/table/$id': typeof TableIdRoute
+  '/table/$id': typeof AppTableIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -82,7 +82,7 @@ export interface FileRoutesByTo {
   '/forge': typeof AppForgeRoute
   '/tables': typeof AppTablesRoute
   '/character/$id': typeof CharacterIdRoute
-  '/table/$id': typeof TableIdRoute
+  '/table/$id': typeof AppTableIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -94,7 +94,7 @@ export interface FileRoutesById {
   '/_app/forge': typeof AppForgeRoute
   '/_app/tables': typeof AppTablesRoute
   '/character/$id': typeof CharacterIdRoute
-  '/table/$id': typeof TableIdRoute
+  '/_app/table/$id': typeof AppTableIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -127,7 +127,7 @@ export interface FileRouteTypes {
     | '/_app/forge'
     | '/_app/tables'
     | '/character/$id'
-    | '/table/$id'
+    | '/_app/table/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -136,7 +136,6 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   CharacterIdRoute: typeof CharacterIdRoute
-  TableIdRoute: typeof TableIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -169,13 +168,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/table/$id': {
-      id: '/table/$id'
-      path: '/table/$id'
-      fullPath: '/table/$id'
-      preLoaderRoute: typeof TableIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/character/$id': {
       id: '/character/$id'
       path: '/character/$id'
@@ -204,6 +196,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCharactersRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/table/$id': {
+      id: '/_app/table/$id'
+      path: '/table/$id'
+      fullPath: '/table/$id'
+      preLoaderRoute: typeof AppTableIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -211,12 +210,14 @@ interface AppRouteChildren {
   AppCharactersRoute: typeof AppCharactersRoute
   AppForgeRoute: typeof AppForgeRoute
   AppTablesRoute: typeof AppTablesRoute
+  AppTableIdRoute: typeof AppTableIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppCharactersRoute: AppCharactersRoute,
   AppForgeRoute: AppForgeRoute,
   AppTablesRoute: AppTablesRoute,
+  AppTableIdRoute: AppTableIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -227,7 +228,6 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
   CharacterIdRoute: CharacterIdRoute,
-  TableIdRoute: TableIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
