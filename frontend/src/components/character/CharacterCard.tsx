@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Swords, Sparkles, Shield, Wand2, User } from "lucide-react";
-import type { Character } from "@/lib/mock-data";
+import type { Character } from "@/context/character-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Scroll, Plus, Hammer, User } from "lucide-react";
 import { useCharacters } from "@/context/character-context";
@@ -66,11 +66,11 @@ function TablesPage() {
                 return (
                   <Card
                     key={table.id}
-                    className="relative overflow-hidden border-border bg-card p-5 hover:neon-border transition-all"
+                    className="relative overflow-hidden border-border bg-card p-5 hover:neon-border transition-all flex flex-col justify-between min-h-[170px]"
                   >
                     <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
                     <div className="flex items-start justify-between gap-4">
-                      <div>
+                      <div className="min-w-0">
                         <h3 className="font-display text-2xl leading-none truncate mb-1">
                           {table.name}
                         </h3>
@@ -86,10 +86,15 @@ function TablesPage() {
                       </div>
                     </div>
 
-                    <div className="mt-6 flex items-center justify-between text-xs border-t border-border pt-4">
-                      <span className="text-muted-foreground">
-                        {characterCount} Personagem(ns) vinculado(s)
+                    <div className="mt-6 flex items-center justify-between text-xs border-t border-border pt-4 gap-3">
+                      <span className="text-muted-foreground truncate">
+                        {characterCount} Herói(s)
                       </span>
+                      <Button asChild size="sm" variant="default" className="h-8">
+                        <Link to="/table/$id" params={{ id: String(table.id) }}>
+                          Acessar Mesa
+                        </Link>
+                      </Button>
                     </div>
                   </Card>
                 );

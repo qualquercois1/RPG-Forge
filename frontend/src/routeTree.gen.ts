@@ -13,6 +13,7 @@ import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TableIdRouteImport } from './routes/table.$id'
 import { Route as CharacterIdRouteImport } from './routes/character.$id'
 import { Route as AppTablesRouteImport } from './routes/_app.tables'
 import { Route as AppForgeRouteImport } from './routes/_app.forge'
@@ -35,6 +36,11 @@ const AppRoute = AppRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TableIdRoute = TableIdRouteImport.update({
+  id: '/table/$id',
+  path: '/table/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CharacterIdRoute = CharacterIdRouteImport.update({
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/forge': typeof AppForgeRoute
   '/tables': typeof AppTablesRoute
   '/character/$id': typeof CharacterIdRoute
+  '/table/$id': typeof TableIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/forge': typeof AppForgeRoute
   '/tables': typeof AppTablesRoute
   '/character/$id': typeof CharacterIdRoute
+  '/table/$id': typeof TableIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/_app/forge': typeof AppForgeRoute
   '/_app/tables': typeof AppTablesRoute
   '/character/$id': typeof CharacterIdRoute
+  '/table/$id': typeof TableIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -97,6 +106,7 @@ export interface FileRouteTypes {
     | '/forge'
     | '/tables'
     | '/character/$id'
+    | '/table/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/forge'
     | '/tables'
     | '/character/$id'
+    | '/table/$id'
   id:
     | '__root__'
     | '/'
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/_app/forge'
     | '/_app/tables'
     | '/character/$id'
+    | '/table/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -124,6 +136,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   CharacterIdRoute: typeof CharacterIdRoute
+  TableIdRoute: typeof TableIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -154,6 +167,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/table/$id': {
+      id: '/table/$id'
+      path: '/table/$id'
+      fullPath: '/table/$id'
+      preLoaderRoute: typeof TableIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/character/$id': {
@@ -207,6 +227,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
   CharacterIdRoute: CharacterIdRoute,
+  TableIdRoute: TableIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

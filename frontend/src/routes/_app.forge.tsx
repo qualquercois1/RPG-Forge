@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Hammer, ArrowLeft } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -53,6 +53,13 @@ function ForgePage() {
   const [attrs, setAttrs] = useState<Attributes>({
     str: 5, agi: 5, int: 5, vit: 5, sur: 5, mag: 5,
   });
+
+  // Auto-select first table once tables are loaded if none is selected
+  useEffect(() => {
+    if (!tableId && tables.length > 0) {
+      setTableId(String(tables[0].id));
+    }
+  }, [tables, tableId]);
 
   const total = useMemo(
     () => ATTR_ORDER.reduce((s, k) => s + (attrs[k] || 0), 0),
