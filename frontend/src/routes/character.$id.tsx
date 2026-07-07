@@ -1,6 +1,6 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, notFound } from "@tanstack/react-router";
 import { ArrowLeft, MapPin, Ruler, Cake, Palette, Scroll, Heart } from "lucide-react";
-import { useCharacters } from "@/context/character-context";
+import { useCharacters, API_BASE } from "@/context/character-context";
 import { AttributeBox } from "@/components/character/AttributeBox";
 import { AttributeRadar } from "@/components/character/AttributeRadar";
 import { InventoryCard } from "@/components/inventory/InventoryCard";
@@ -25,23 +25,34 @@ export const Route = createFileRoute("/character/$id")({
 function CharacterSheet() {
   const { id } = Route.useParams();
   const charId = parseInt(id, 10);
-  const { tables, user, fetchInventory, updateCharacter } = useCharacters();
+  const { tables, user, fetchInventory, updateCharacter, loading } = useCharacters();
+  const navigate = useNavigate();
 
   const [character, setCharacter] = useState<Character | null>(null);
   const [charLoading, setCharLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate({ to: "/login" });
+    }
+  }, [user, loading, navigate]);
   const [lore, setLore] = useState("");
   const [hpChange, setHpChange] = useState("5");
 
   const fetchCharData = useCallback(async () => {
     try {
-      const res = await fetch(`http://localhost:8000/api/characters/${charId}`);
+      const res = await fetch(`${API_BASE}/characters/${charId}`);
       if (res.ok) {
         const data = await res.json();
         setCharacter(data);
         setLore(data.lore ?? "");
+      } else {
+        setErrorMsg(`Erro de carregamento: Status ${res.status} (${res.statusText}) ao acessar o endpoint do personagem.`);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Erro ao carregar personagem:", e);
+      setErrorMsg(`Erro de rede ou conexão: ${e.message || e}. Verifique se o servidor backend está ativo na porta 8000.`);
     } finally {
       setCharLoading(false);
     }
@@ -67,8 +78,22 @@ function CharacterSheet() {
 
   if (!character) {
     return (
-      <div className="min-h-screen w-full grid place-items-center text-muted-foreground font-mono">
-        Personagem não encontrado.
+      <div className="min-h-screen w-full grid place-items-center text-muted-foreground font-mono p-4">
+        <div className="max-w-md w-full bg-card border border-border rounded-lg p-6 space-y-4 text-center">
+          <h2 className="text-xl font-bold text-destructive">Personagem não encontrado</h2>
+          <p className="text-sm text-muted-foreground">Não foi possível carregar a ficha deste herói.</p>
+          {errorMsg && (
+            <div className="bg-muted/30 border border-border/50 rounded p-3 text-left text-xs text-muted-foreground font-mono whitespace-pre-wrap">
+              <strong>Detalhes do Erro:</strong><br />
+              {errorMsg}
+            </div>
+          )}
+          <div className="pt-2">
+            <Link to="/tables" className="text-xs text-primary hover:underline">
+              ← Voltar para Mesas
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }

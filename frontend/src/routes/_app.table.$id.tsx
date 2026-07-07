@@ -40,6 +40,7 @@ function TableDetailPage() {
     createTableItem,
     assignTableItem,
     deleteTableItem,
+    deleteSessionLog,
     fetchInventory,
     updateCharacter,
     deleteInventoryItem,
@@ -383,7 +384,7 @@ function TableDetailPage() {
               </Card>
 
               {/* Items List */}
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin">
                 {tableItems.length === 0 ? (
                   <div className="text-sm text-muted-foreground/60 text-center py-6 border border-dashed border-border rounded-lg">
                     O baú está vazio. Crie itens acima.

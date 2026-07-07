@@ -126,7 +126,7 @@ type Ctx = {
 
 const CharacterContext = createContext<Ctx | null>(null);
 
-const API_BASE = "http://localhost:8000/api";
+export const API_BASE = "http://localhost:8000/api";
 
 export function CharacterProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<{ id: number; username: string } | null>(null);

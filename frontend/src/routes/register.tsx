@@ -1,10 +1,11 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Swords } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { useCharacters } from "@/context/character-context";
 
 export const Route = createFileRoute("/register")({
   head: () => ({
@@ -18,10 +19,17 @@ export const Route = createFileRoute("/register")({
 
 function RegisterPage() {
   const navigate = useNavigate();
+  const { user: loggedInUser } = useCharacters();
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (loggedInUser) {
+      navigate({ to: "/tables" });
+    }
+  }, [loggedInUser, navigate]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

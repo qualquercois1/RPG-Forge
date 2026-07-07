@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Swords } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,10 +19,16 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { loginUser } = useCharacters();
+  const { loginUser, user: loggedInUser } = useCharacters();
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (loggedInUser) {
+      navigate({ to: "/tables" });
+    }
+  }, [loggedInUser, navigate]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
