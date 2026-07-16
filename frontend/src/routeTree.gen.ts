@@ -15,8 +15,10 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CharacterIdRouteImport } from './routes/character.$id'
 import { Route as AppTablesRouteImport } from './routes/_app.tables'
+import { Route as AppFriendsRouteImport } from './routes/_app.friends'
 import { Route as AppForgeRouteImport } from './routes/_app.forge'
 import { Route as AppCharactersRouteImport } from './routes/_app.characters'
+import { Route as AppAdminRouteImport } from './routes/_app.admin'
 import { Route as AppTableIdRouteImport } from './routes/_app.table.$id'
 
 const RegisterRoute = RegisterRouteImport.update({
@@ -48,6 +50,11 @@ const AppTablesRoute = AppTablesRouteImport.update({
   path: '/tables',
   getParentRoute: () => AppRoute,
 } as any)
+const AppFriendsRoute = AppFriendsRouteImport.update({
+  id: '/friends',
+  path: '/friends',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppForgeRoute = AppForgeRouteImport.update({
   id: '/forge',
   path: '/forge',
@@ -56,6 +63,11 @@ const AppForgeRoute = AppForgeRouteImport.update({
 const AppCharactersRoute = AppCharactersRouteImport.update({
   id: '/characters',
   path: '/characters',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminRoute = AppAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => AppRoute,
 } as any)
 const AppTableIdRoute = AppTableIdRouteImport.update({
@@ -68,8 +80,10 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/admin': typeof AppAdminRoute
   '/characters': typeof AppCharactersRoute
   '/forge': typeof AppForgeRoute
+  '/friends': typeof AppFriendsRoute
   '/tables': typeof AppTablesRoute
   '/character/$id': typeof CharacterIdRoute
   '/table/$id': typeof AppTableIdRoute
@@ -78,8 +92,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/admin': typeof AppAdminRoute
   '/characters': typeof AppCharactersRoute
   '/forge': typeof AppForgeRoute
+  '/friends': typeof AppFriendsRoute
   '/tables': typeof AppTablesRoute
   '/character/$id': typeof CharacterIdRoute
   '/table/$id': typeof AppTableIdRoute
@@ -90,8 +106,10 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/_app/admin': typeof AppAdminRoute
   '/_app/characters': typeof AppCharactersRoute
   '/_app/forge': typeof AppForgeRoute
+  '/_app/friends': typeof AppFriendsRoute
   '/_app/tables': typeof AppTablesRoute
   '/character/$id': typeof CharacterIdRoute
   '/_app/table/$id': typeof AppTableIdRoute
@@ -102,8 +120,10 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/register'
+    | '/admin'
     | '/characters'
     | '/forge'
+    | '/friends'
     | '/tables'
     | '/character/$id'
     | '/table/$id'
@@ -112,8 +132,10 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/register'
+    | '/admin'
     | '/characters'
     | '/forge'
+    | '/friends'
     | '/tables'
     | '/character/$id'
     | '/table/$id'
@@ -123,8 +145,10 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/register'
+    | '/_app/admin'
     | '/_app/characters'
     | '/_app/forge'
+    | '/_app/friends'
     | '/_app/tables'
     | '/character/$id'
     | '/_app/table/$id'
@@ -182,6 +206,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTablesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/friends': {
+      id: '/_app/friends'
+      path: '/friends'
+      fullPath: '/friends'
+      preLoaderRoute: typeof AppFriendsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/forge': {
       id: '/_app/forge'
       path: '/forge'
@@ -196,6 +227,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCharactersRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin': {
+      id: '/_app/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AppAdminRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/table/$id': {
       id: '/_app/table/$id'
       path: '/table/$id'
@@ -207,15 +245,19 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppAdminRoute: typeof AppAdminRoute
   AppCharactersRoute: typeof AppCharactersRoute
   AppForgeRoute: typeof AppForgeRoute
+  AppFriendsRoute: typeof AppFriendsRoute
   AppTablesRoute: typeof AppTablesRoute
   AppTableIdRoute: typeof AppTableIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAdminRoute: AppAdminRoute,
   AppCharactersRoute: AppCharactersRoute,
   AppForgeRoute: AppForgeRoute,
+  AppFriendsRoute: AppFriendsRoute,
   AppTablesRoute: AppTablesRoute,
   AppTableIdRoute: AppTableIdRoute,
 }

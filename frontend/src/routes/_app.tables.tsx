@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Scroll, Plus, Hammer, User } from "lucide-react";
+import { Scroll, Plus, Hammer, User, Check, X } from "lucide-react";
 import { useCharacters } from "@/context/character-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,7 +18,15 @@ export const Route = createFileRoute("/_app/tables")({
 });
 
 function TablesPage() {
-  const { tables, addTable, user, characters } = useCharacters();
+  const { 
+    tables, 
+    addTable, 
+    user, 
+    characters, 
+    tableInvitations, 
+    acceptTableInvitation, 
+    declineTableInvitation 
+  } = useCharacters();
   const [tableName, setTableName] = useState("");
   const [error, setError] = useState("");
 
@@ -48,6 +56,49 @@ function TablesPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-8 items-start">
         {/* Left Column: Tables List */}
         <div className="space-y-4">
+          {/* Pending Table Invitations */}
+          {tableInvitations?.length > 0 && (
+            <div className="mb-6 space-y-4 border-b border-border pb-6">
+              <h2 className="font-display text-2xl text-primary flex items-center gap-2">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+                </span>
+                Convites para Campanhas ({tableInvitations.length})
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {tableInvitations.map((inv) => (
+                  <Card key={inv.id} className="p-4 border-primary/40 bg-primary/5 flex items-center justify-between gap-4 relative overflow-hidden">
+                    <div className="absolute inset-y-0 left-0 w-[3px] bg-primary" />
+                    <div>
+                      <div className="font-mono text-xs text-muted-foreground">Convidado para a mesa:</div>
+                      <div className="font-display text-lg font-semibold text-foreground truncate max-w-[180px]">{inv.table_name}</div>
+                      <div className="text-xs text-muted-foreground">Mestre: <span className="font-semibold text-primary/80">{inv.gm_username}</span></div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Button
+                        size="icon"
+                        variant="default"
+                        className="h-8 w-8 rounded-md"
+                        onClick={() => acceptTableInvitation(inv.id)}
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="destructive"
+                        className="h-8 w-8 rounded-md"
+                        onClick={() => declineTableInvitation(inv.id)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
           <h2 className="font-display text-2xl mb-4">Mesas Disponíveis</h2>
           {tables.length === 0 ? (
             <div className="text-center py-12 border border-dashed border-border rounded-xl bg-card/30">

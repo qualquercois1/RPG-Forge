@@ -122,6 +122,20 @@ type Ctx = {
   addTable: (name: string) => Promise<boolean>;
   addInventoryItem: (charId: number, item_name: string, description: string, weight: number, quantity: number) => Promise<void>;
   deleteInventoryItem: (charId: number, itemId: number) => Promise<void>;
+  friends: { id: number; username: string }[];
+  pendingRequests: { id: number; sender_id: number; username: string }[];
+  fetchFriends: () => Promise<void>;
+  fetchPendingRequests: () => Promise<void>;
+  sendFriendRequest: (username: string) => Promise<{ success: boolean; error?: string }>;
+  acceptFriendRequest: (reqId: number) => Promise<boolean>;
+  declineFriendRequest: (reqId: number) => Promise<boolean>;
+  removeFriend: (friendId: number) => Promise<boolean>;
+  tableInvitations: { id: number; table_name: string; gm_username: string }[];
+  fetchTableInvitations: () => Promise<void>;
+  acceptTableInvitation: (inviteId: number) => Promise<boolean>;
+  declineTableInvitation: (inviteId: number) => Promise<boolean>;
+  inviteToTable: (tableId: number, username: string) => Promise<{ success: boolean; error?: string }>;
+  fetchTableInvitationsList: (tableId: number) => Promise<{ id: number; username: string; status: string }[]>;
 };
 
 const CharacterContext = createContext<Ctx | null>(null);
@@ -138,6 +152,9 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
   const [tableCharacters, setTableCharacters] = useState<Record<number, Character[]>>({});
   const [tableItemsByTable, setTableItemsByTable] = useState<Record<number, TableItem[]>>({});
   const [loading, setLoading] = useState<boolean>(true);
+  const [friends, setFriends] = useState<{ id: number; username: string }[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<{ id: number; sender_id: number; username: string }[]>([]);
+  const [tableInvitations, setTableInvitations] = useState<{ id: number; table_name: string; gm_username: string }[]>([]);
 
   // Initialize user from localStorage
   useEffect(() => {
@@ -167,13 +184,135 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
     setLogsBySession({});
     setTableCharacters({});
     setTableItemsByTable({});
+    setFriends([]);
+    setPendingRequests([]);
+    setTableInvitations([]);
   }, []);
+
+  const fetchFriends = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`${API_BASE}/friends`, {
+        headers: { "X-User-Id": String(user.id) }
+      });
+      if (res.ok) {
+        setFriends(await res.json());
+      }
+    } catch (err) {
+      console.error("Erro ao buscar amigos:", err);
+    }
+  }, [user]);
+
+  const fetchPendingRequests = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`${API_BASE}/friends/requests/pending`, {
+        headers: { "X-User-Id": String(user.id) }
+      });
+      if (res.ok) {
+        setPendingRequests(await res.json());
+      }
+    } catch (err) {
+      console.error("Erro ao buscar solicitações pendentes:", err);
+    }
+  }, [user]);
+
+  const sendFriendRequest = useCallback(async (username: string) => {
+    if (!user) return { success: false, error: "Usuário não autenticado." };
+    try {
+      const res = await fetch(`${API_BASE}/friends/request`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Id": String(user.id)
+        },
+        body: JSON.stringify({ username })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        return { success: true };
+      } else {
+        return { success: false, error: data.detail || "Erro ao enviar solicitação." };
+      }
+    } catch (err) {
+      console.error("Erro ao enviar solicitação de amizade:", err);
+      return { success: false, error: "Erro de conexão." };
+    }
+  }, [user]);
+
+  const acceptFriendRequest = useCallback(async (reqId: number) => {
+    if (!user) return false;
+    try {
+      const res = await fetch(`${API_BASE}/friends/requests/${reqId}/accept`, {
+        method: "POST",
+        headers: { "X-User-Id": String(user.id) }
+      });
+      if (res.ok) {
+        await fetchPendingRequests();
+        await fetchFriends();
+        return true;
+      }
+    } catch (err) {
+      console.error("Erro ao aceitar solicitação:", err);
+    }
+    return false;
+  }, [user, fetchPendingRequests, fetchFriends]);
+
+  const declineFriendRequest = useCallback(async (reqId: number) => {
+    if (!user) return false;
+    try {
+      const res = await fetch(`${API_BASE}/friends/requests/${reqId}/decline`, {
+        method: "POST",
+        headers: { "X-User-Id": String(user.id) }
+      });
+      if (res.ok) {
+        await fetchPendingRequests();
+        return true;
+      }
+    } catch (err) {
+      console.error("Erro ao recusar solicitação:", err);
+    }
+    return false;
+  }, [user, fetchPendingRequests]);
+
+  const removeFriend = useCallback(async (friendId: number) => {
+    if (!user) return false;
+    try {
+      const res = await fetch(`${API_BASE}/friends/${friendId}`, {
+        method: "DELETE",
+        headers: { "X-User-Id": String(user.id) }
+      });
+      if (res.ok) {
+        await fetchFriends();
+        return true;
+      }
+    } catch (err) {
+      console.error("Erro ao remover amigo:", err);
+    }
+    return false;
+  }, [user, fetchFriends]);
+
+  const fetchTableInvitations = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`${API_BASE}/invitations`, {
+        headers: { "X-User-Id": String(user.id) }
+      });
+      if (res.ok) {
+        setTableInvitations(await res.json());
+      }
+    } catch (err) {
+      console.error("Erro ao buscar convites de mesa:", err);
+    }
+  }, [user]);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
     try {
       // Fetch tables
-      const resTables = await fetch(`${API_BASE}/tables`);
+      const resTables = await fetch(`${API_BASE}/tables`, {
+        headers: { "X-User-Id": String(user.id) }
+      });
       if (resTables.ok) {
         const dataTables = await resTables.json();
         setTables(dataTables);
@@ -189,9 +328,94 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
         const dataChars = await resChars.json();
         setCharacters(dataChars);
       }
+
+      // Fetch friends and requests
+      await fetchFriends();
+      await fetchPendingRequests();
+      await fetchTableInvitations();
     } catch (err) {
       console.error("Erro ao buscar dados do backend:", err);
     }
+  }, [user, fetchFriends, fetchPendingRequests, fetchTableInvitations]);
+
+  const acceptTableInvitation = useCallback(async (inviteId: number) => {
+    if (!user) return false;
+    try {
+      const res = await fetch(`${API_BASE}/invitations/${inviteId}/accept`, {
+        method: "POST",
+        headers: { "X-User-Id": String(user.id) }
+      });
+      if (res.ok) {
+        await fetchTableInvitations();
+        // Trigger fetch data to reload tables list
+        // Fetch tables
+        const resTables = await fetch(`${API_BASE}/tables`, {
+          headers: { "X-User-Id": String(user.id) }
+        });
+        if (resTables.ok) {
+          setTables(await resTables.json());
+        }
+        return true;
+      }
+    } catch (err) {
+      console.error("Erro ao aceitar convite de mesa:", err);
+    }
+    return false;
+  }, [user, fetchTableInvitations]);
+
+  const declineTableInvitation = useCallback(async (inviteId: number) => {
+    if (!user) return false;
+    try {
+      const res = await fetch(`${API_BASE}/invitations/${inviteId}/decline`, {
+        method: "POST",
+        headers: { "X-User-Id": String(user.id) }
+      });
+      if (res.ok) {
+        await fetchTableInvitations();
+        return true;
+      }
+    } catch (err) {
+      console.error("Erro ao recusar convite de mesa:", err);
+    }
+    return false;
+  }, [user, fetchTableInvitations]);
+
+  const inviteToTable = useCallback(async (tableId: number, username: string) => {
+    if (!user) return { success: false, error: "Usuário não autenticado." };
+    try {
+      const res = await fetch(`${API_BASE}/tables/${tableId}/invite`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Id": String(user.id)
+        },
+        body: JSON.stringify({ username })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        return { success: true };
+      } else {
+        return { success: false, error: data.detail || "Erro ao convidar jogador." };
+      }
+    } catch (err) {
+      console.error("Erro ao convidar jogador:", err);
+      return { success: false, error: "Erro de conexão." };
+    }
+  }, [user]);
+
+  const fetchTableInvitationsList = useCallback(async (tableId: number) => {
+    if (!user) return [];
+    try {
+      const res = await fetch(`${API_BASE}/tables/${tableId}/invitations`, {
+        headers: { "X-User-Id": String(user.id) }
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.error("Erro ao buscar convidados da mesa:", err);
+    }
+    return [];
   }, [user]);
 
   // Fetch data when user changes
@@ -214,8 +438,11 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fetchTableCharacters = useCallback(async (tableId: number) => {
+    if (!user) return;
     try {
-      const res = await fetch(`${API_BASE}/tables/${tableId}/characters`);
+      const res = await fetch(`${API_BASE}/tables/${tableId}/characters`, {
+        headers: { "X-User-Id": String(user.id) }
+      });
       if (res.ok) {
         const data = await res.json();
         setTableCharacters((prev) => ({ ...prev, [tableId]: data }));
@@ -223,11 +450,14 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error(`Erro ao buscar personagens da mesa ${tableId}:`, err);
     }
-  }, []);
+  }, [user]);
 
   const fetchSessions = useCallback(async (tableId: number) => {
+    if (!user) return;
     try {
-      const res = await fetch(`${API_BASE}/tables/${tableId}/sessions`);
+      const res = await fetch(`${API_BASE}/tables/${tableId}/sessions`, {
+        headers: { "X-User-Id": String(user.id) }
+      });
       if (res.ok) {
         const data = await res.json();
         setSessionsByTable((prev) => ({ ...prev, [tableId]: data }));
@@ -235,14 +465,16 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error(`Erro ao buscar sessões da mesa ${tableId}:`, err);
     }
-  }, []);
+  }, [user]);
 
   const addSession = useCallback(async (tableId: number, name: string, description?: string) => {
+    if (!user) return false;
     try {
       const res = await fetch(`${API_BASE}/tables/${tableId}/sessions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "X-User-Id": String(user.id),
         },
         body: JSON.stringify({ name, description }),
       });
@@ -254,7 +486,7 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
       console.error("Erro ao criar sessão:", err);
     }
     return false;
-  }, [fetchSessions]);
+  }, [user, fetchSessions]);
 
   const fetchSessionLogs = useCallback(async (sessionId: number) => {
     try {
@@ -290,8 +522,11 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
   }, [user, fetchSessionLogs]);
 
   const fetchTableItems = useCallback(async (tableId: number) => {
+    if (!user) return;
     try {
-      const res = await fetch(`${API_BASE}/tables/${tableId}/items`);
+      const res = await fetch(`${API_BASE}/tables/${tableId}/items`, {
+        headers: { "X-User-Id": String(user.id) }
+      });
       if (res.ok) {
         const data = await res.json();
         setTableItemsByTable((prev) => ({ ...prev, [tableId]: data }));
@@ -299,14 +534,16 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error(`Erro ao buscar itens da mesa ${tableId}:`, err);
     }
-  }, []);
+  }, [user]);
 
   const createTableItem = useCallback(async (tableId: number, name: string, description: string, weight: number) => {
+    if (!user) return false;
     try {
       const res = await fetch(`${API_BASE}/tables/${tableId}/items`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "X-User-Id": String(user.id),
         },
         body: JSON.stringify({ item_name: name, description, weight }),
       });
@@ -318,14 +555,16 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
       console.error("Erro ao criar item na mesa:", err);
     }
     return false;
-  }, [fetchTableItems]);
+  }, [user, fetchTableItems]);
 
   const assignTableItem = useCallback(async (tableId: number, itemId: number, characterId: number, quantity: number) => {
+    if (!user) return false;
     try {
       const res = await fetch(`${API_BASE}/tables/${tableId}/items/${itemId}/assign`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "X-User-Id": String(user.id),
         },
         body: JSON.stringify({ character_id: characterId, quantity }),
       });
@@ -338,7 +577,7 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
       console.error("Erro ao atribuir item ao personagem:", err);
     }
     return false;
-  }, [fetchInventory]);
+  }, [user, fetchInventory]);
 
   const deleteTableItem = useCallback(async (itemId: number, tableId: number) => {
     try {
@@ -517,6 +756,20 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
         addTable,
         addInventoryItem,
         deleteInventoryItem,
+        friends,
+        pendingRequests,
+        fetchFriends,
+        fetchPendingRequests,
+        sendFriendRequest,
+        acceptFriendRequest,
+        declineFriendRequest,
+        removeFriend,
+        tableInvitations,
+        fetchTableInvitations,
+        acceptTableInvitation,
+        declineTableInvitation,
+        inviteToTable,
+        fetchTableInvitationsList,
       }}
     >
       {children}

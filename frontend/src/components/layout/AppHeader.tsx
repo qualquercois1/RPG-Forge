@@ -1,17 +1,32 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Users, Hammer, LogOut, Swords, Scroll } from "lucide-react";
+import { Users, Hammer, LogOut, Swords, Scroll, UserPlus, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCharacters } from "@/context/character-context";
 
 export function AppHeader() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { logoutUser, user } = useCharacters();
+  const { logoutUser, user, pendingRequests, tableInvitations } = useCharacters();
 
   const nav = [
     { to: "/characters", label: "Heróis", icon: Users },
-    { to: "/tables", label: "Mesas", icon: Scroll },
+    { 
+      to: "/tables", 
+      label: "Mesas", 
+      icon: Scroll,
+      badge: tableInvitations?.length > 0 ? tableInvitations.length : undefined 
+    },
     { to: "/forge", label: "Forja", icon: Hammer },
-  ] as const;
+    { 
+      to: "/friends", 
+      label: "Amigos", 
+      icon: UserPlus, 
+      badge: pendingRequests?.length > 0 ? pendingRequests.length : undefined 
+    },
+  ];
+
+  if (user?.username === "admin") {
+    nav.push({ to: "/admin", label: "Admin", icon: Shield });
+  }
 
   return (
     <header className="w-full border-b border-border bg-card/50 backdrop-blur sticky top-0 z-30">
@@ -27,14 +42,14 @@ export function AppHeader() {
           </Link>
 
           <nav className="flex items-center gap-1">
-            {nav.map(({ to, label, icon: Icon }) => {
+            {nav.map(({ to, label, icon: Icon, badge }) => {
               const active = pathname === to || pathname.startsWith(to + "/");
               return (
                 <Link
                   key={to}
                   to={to}
                   className={cn(
-                    "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors font-medium",
+                    "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors font-medium relative",
                     active
                       ? "bg-primary/10 text-primary border border-primary/30"
                       : "text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -42,6 +57,11 @@ export function AppHeader() {
                 >
                   <Icon className="h-4 w-4" />
                   <span>{label}</span>
+                  {badge !== undefined && (
+                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground animate-pulse">
+                      {badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}

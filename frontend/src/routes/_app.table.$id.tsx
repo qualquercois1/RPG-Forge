@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Scroll, Plus, Dices, Send, Skull, Shield, Heart, RefreshCw, Backpack, Trash2 } from "lucide-react";
+import { ArrowLeft, Scroll, Plus, Dices, Send, Skull, Shield, Heart, RefreshCw, Backpack, Trash2, Users, User } from "lucide-react";
 import { useCharacters } from "@/context/character-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -8,6 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/_app/table/$id")({
   head: ({ params }) => ({
@@ -45,6 +52,9 @@ function TableDetailPage() {
     updateCharacter,
     deleteInventoryItem,
     user,
+    inviteToTable,
+    fetchTableInvitationsList,
+    friends,
   } = useCharacters();
 
   const currentTable = tables.find((t) => t.id === tableId);
@@ -64,6 +74,16 @@ function TableDetailPage() {
   const [newItemWeight, setNewItemWeight] = useState("1.0");
   const [assignCharId, setAssignCharId] = useState<Record<number, string>>({});
   const [assignQty, setAssignQty] = useState<Record<number, string>>({});
+
+  const [selectedCharacterId, setSelectedCharacterId] = useState<number | null>(() => {
+    const saved = localStorage.getItem(`table_char_${tableId}`);
+    return saved ? parseInt(saved, 10) : null;
+  });
+  const [inviteUsername, setInviteUsername] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [inviteSuccess, setInviteSuccess] = useState("");
+  const [guests, setGuests] = useState<{ id: number; username: string; status: string }[]>([]);
 
   // Character Modal View state
   const [selectedCharForModal, setSelectedCharForModal] = useState<any | null>(null);
@@ -96,6 +116,61 @@ function TableDetailPage() {
       fetchSessionLogs(activeSessionId);
     }
   }, [activeSessionId, fetchSessionLogs]);
+
+  const isGM = currentTable?.game_master_id === user?.id;
+  const myChars = characters.filter((c) => c.user_id === user?.id);
+
+  // Load guests for GM
+  const loadGuests = async () => {
+    if (isGM) {
+      const list = await fetchTableInvitationsList(tableId);
+      setGuests(list);
+    }
+  };
+
+  useEffect(() => {
+    loadGuests();
+  }, [tableId, isGM]);
+
+  // Handle auto-redirection to forge if user is not GM and has no character for this table
+  useEffect(() => {
+    if (currentTable && user && currentTable.game_master_id !== user.id && tableCharacters[tableId] !== undefined) {
+      const myCharsForTable = (tableCharacters[tableId] || []).filter((c) => c.user_id === user.id);
+      if (myCharsForTable.length === 0) {
+        navigate({ to: "/forge", search: { tableId: String(tableId) } as any });
+      }
+    }
+  }, [currentTable, user, tableCharacters, tableId, navigate]);
+
+  // Reset selectedCharacterId if it no longer exists
+  useEffect(() => {
+    if (selectedCharacterId !== null && myChars.length > 0) {
+      const stillExists = myChars.some((c) => c.id === selectedCharacterId);
+      if (!stillExists) {
+        setSelectedCharacterId(null);
+        localStorage.removeItem(`table_char_${tableId}`);
+      }
+    }
+  }, [myChars, selectedCharacterId, tableId]);
+
+  const handleSendTableInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviteError("");
+    setInviteSuccess("");
+    if (!inviteUsername.trim()) return;
+
+    setInviting(true);
+    const res = await inviteToTable(tableId, inviteUsername.trim());
+    setInviting(false);
+
+    if (res.success) {
+      setInviteSuccess(`Convite enviado para ${inviteUsername}!`);
+      setInviteUsername("");
+      loadGuests();
+    } else {
+      setInviteError(res.error || "Erro ao convidar jogador.");
+    }
+  };
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   const logs = activeSessionId !== null ? (logsBySession[activeSessionId] ?? []) : [];
@@ -182,7 +257,61 @@ function TableDetailPage() {
     );
   }
 
-  const isGM = currentTable.game_master_id === user?.id;
+  // Character selection overlay for players
+  if (user && !isGM && selectedCharacterId === null && myChars.length > 0) {
+    return (
+      <div className="p-6 md:p-10 max-w-xl mx-auto min-h-[70vh] grid place-items-center">
+        <Card className="w-full p-8 bg-card/85 backdrop-blur border-border neon-border text-center space-y-6">
+          <div className="grid place-items-center h-14 w-14 rounded-xl bg-primary/10 text-primary border border-primary/40 neon-border mx-auto">
+            <User className="h-7 w-7" />
+          </div>
+          <div>
+            <h2 className="font-display text-3xl tracking-wide">Selecione seu Herói</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Escolha com qual personagem você participará desta mesa de campanha.
+            </p>
+          </div>
+
+          <div className="space-y-3 text-left">
+            {myChars.map((char) => (
+              <button
+                key={char.id}
+                onClick={() => {
+                  setSelectedCharacterId(char.id);
+                  localStorage.setItem(`table_char_${tableId}`, String(char.id));
+                }}
+                className="w-full p-4 rounded-lg border border-border bg-secondary/20 hover:border-primary/50 hover:bg-primary/5 transition-all text-left flex items-center justify-between group cursor-pointer"
+              >
+                <div>
+                  <div className="font-display text-xl font-bold group-hover:text-primary transition-colors">
+                    {char.name}
+                  </div>
+                  <div className="text-xs text-muted-foreground font-mono mt-0.5">
+                    {char.classe} • Nível {char.level}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    "text-[10px] uppercase font-mono tracking-wider px-2 py-0.5 rounded font-semibold",
+                    char.alive === 1 ? "bg-primary/10 text-primary border border-primary/20" : "bg-destructive/10 text-destructive border border-destructive/20"
+                  )}>
+                    {char.alive === 1 ? "Vivo" : "Morto"}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="text-xs text-muted-foreground">
+            Quer criar outro herói?{" "}
+            <Link to="/forge" search={{ tableId: String(tableId) } as any} className="text-primary hover:underline font-semibold">
+              Ir para a Forja
+            </Link>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-6">
@@ -248,6 +377,131 @@ function TableDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6 items-start">
         {/* Left Column: Characters List & GM Items Chest */}
         <div className="space-y-6">
+          
+          {/* Active Character for current user */}
+          {!isGM && selectedCharacterId !== null && (
+            <Card className="p-4 border-primary bg-primary/5 neon-border space-y-3 relative overflow-hidden">
+              <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] uppercase font-mono tracking-widest text-primary font-bold">
+                  Seu Herói Ativo
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-5 px-1.5 text-[9px] font-mono uppercase text-muted-foreground hover:text-foreground cursor-pointer"
+                  onClick={() => {
+                    setSelectedCharacterId(null);
+                    localStorage.removeItem(`table_char_${tableId}`);
+                  }}
+                >
+                  Trocar
+                </Button>
+              </div>
+              {(() => {
+                const char = myChars.find((c) => c.id === selectedCharacterId);
+                if (!char) return null;
+                return (
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h4 className="font-display text-lg font-bold text-foreground leading-tight">
+                        {char.name}
+                      </h4>
+                      <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                        {char.classe} • Nível {char.level}
+                      </p>
+                    </div>
+                    <span className={cn(
+                      "text-[9px] uppercase font-bold px-1.5 py-0.5 rounded",
+                      char.alive === 1 ? "bg-primary/10 text-primary border border-primary/20" : "bg-destructive/10 text-destructive border border-destructive/20"
+                    )}>
+                      {char.alive === 1 ? "Vivo" : "Morto"}
+                    </span>
+                  </div>
+                );
+              })()}
+            </Card>
+          )}
+
+          {/* GM Guest Management Card */}
+          {isGM && (
+            <Card className="p-6 bg-card/85 backdrop-blur border-border neon-border relative overflow-hidden">
+              <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+              <h3 className="font-display text-xl mb-4 flex items-center gap-2 text-primary">
+                <Users className="h-5 w-5" /> Convidar Jogadores
+              </h3>
+              <form onSubmit={handleSendTableInvite} className="space-y-3 mb-6">
+                {friends?.length > 0 && (
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Convidar da lista de amigos
+                    </Label>
+                    <Select
+                      onValueChange={(val) => {
+                        if (val) setInviteUsername(val);
+                      }}
+                      value={friends.some((f) => f.username === inviteUsername) ? inviteUsername : ""}
+                    >
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue placeholder="Selecione um amigo..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {friends.map((f) => (
+                          <SelectItem key={f.id} value={f.username} className="text-xs">
+                            {f.username}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  {friends?.length > 0 && (
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Ou digite o nome de usuário
+                    </Label>
+                  )}
+                  <div className="flex gap-2">
+                    <Input
+                      value={inviteUsername}
+                      onChange={(e) => setInviteUsername(e.target.value)}
+                      placeholder="Nome de usuário"
+                      required
+                      className="h-9 text-sm"
+                    />
+                    <Button type="submit" size="sm" disabled={inviting}>
+                      Convidar
+                    </Button>
+                  </div>
+                </div>
+                {inviteError && <p className="text-xs text-destructive">{inviteError}</p>}
+                {inviteSuccess && <p className="text-xs text-primary">{inviteSuccess}</p>}
+              </form>
+
+              <h4 className="font-display text-xs uppercase tracking-widest text-muted-foreground mb-3">
+                Status dos Convites
+              </h4>
+              {guests.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nenhum jogador convidado.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {guests.map((g) => (
+                    <div key={g.id} className="flex items-center justify-between text-xs bg-secondary/30 px-3 py-1.5 rounded border border-border">
+                      <span className="font-mono text-foreground font-semibold">{g.username}</span>
+                      <span className={cn(
+                        "text-[9px] uppercase font-mono tracking-wider px-1.5 py-0.5 rounded",
+                        g.status === "accepted" ? "bg-primary/10 text-primary border border-primary/20" : "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20"
+                      )}>
+                        {g.status === "accepted" ? "Membro" : "Pendente"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
+
           <div className="space-y-4">
             <h2 className="font-display text-2xl flex items-center gap-2">
               <Shield className="h-5 w-5 text-primary" /> Personagens na Mesa

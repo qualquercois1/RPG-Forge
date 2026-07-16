@@ -123,14 +123,48 @@ def login(user_auth: UserAuth):
 
 # --- TABLES ENDPOINTS ---
 
-@app.get("/api/tables")
-def get_tables():
+def check_table_access(table_id: int, user_id: int):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name, game_master_id FROM tables")
-    rows = cursor.fetchall()
-    conn.close()
-    return [{"id": r[0], "name": r[1], "game_master_id": r[2]} for r in rows]
+    try:
+        # Check if GM
+        cursor.execute("SELECT game_master_id FROM tables WHERE id = ?", (table_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Mesa não encontrada.")
+        gm_id = row[0]
+        if gm_id == user_id:
+            return True
+        
+        # Check if invited & accepted
+        cursor.execute("SELECT id FROM table_invitations WHERE table_id = ? AND user_id = ? AND status = 'accepted'", (table_id, user_id))
+        if cursor.fetchone():
+            return True
+        
+        raise HTTPException(status_code=403, detail="Você não tem permissão para acessar esta mesa. É necessário ser convidado pelo mestre.")
+    finally:
+        conn.close()
+
+@app.get("/api/tables")
+def get_tables(x_user_id: Optional[str] = Header(None)):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        if x_user_id:
+            uid = int(x_user_id)
+            cursor.execute("""
+                SELECT t.id, t.name, t.game_master_id 
+                FROM tables t
+                LEFT JOIN table_invitations ti ON t.id = ti.table_id AND ti.user_id = ?
+                WHERE t.game_master_id = ? OR ti.status = 'accepted'
+                GROUP BY t.id
+            """, (uid, uid))
+        else:
+            cursor.execute("SELECT id, name, game_master_id FROM tables")
+        rows = cursor.fetchall()
+        return [{"id": r[0], "name": r[1], "game_master_id": r[2]} for r in rows]
+    finally:
+        conn.close()
 
 @app.post("/api/tables")
 def create_table(table: TableCreate, x_user_id: str = Header(...)):
@@ -194,7 +228,8 @@ def get_character(char_id: int):
     }
 
 @app.get("/api/tables/{table_id}/characters")
-def get_table_characters(table_id: int):
+def get_table_characters(table_id: int, x_user_id: str = Header(...)):
+    check_table_access(table_id, int(x_user_id))
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -219,9 +254,10 @@ def get_table_characters(table_id: int):
 
 @app.post("/api/characters")
 def create_character(char: CharacterCreate, x_user_id: str = Header(...)):
+    uid = int(x_user_id)
+    check_table_access(char.table_id, uid)
     conn = get_connection()
     cursor = conn.cursor()
-    uid = int(x_user_id)
     try:
         # 1. Obter game_master_id da mesa
         cursor.execute("SELECT game_master_id FROM tables WHERE id = ?", (char.table_id,))
@@ -356,7 +392,8 @@ def delete_inventory_item(item_id: int):
 # --- SESSIONS & EVENT LOGS ENDPOINTS ---
 
 @app.get("/api/tables/{table_id}/sessions")
-def get_sessions(table_id: int):
+def get_sessions(table_id: int, x_user_id: str = Header(...)):
+    check_table_access(table_id, int(x_user_id))
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, table_id, name, description, created_at FROM sessions WHERE table_id = ? ORDER BY id DESC", (table_id,))
@@ -365,7 +402,8 @@ def get_sessions(table_id: int):
     return [{"id": r[0], "table_id": r[1], "name": r[2], "description": r[3], "created_at": r[4]} for r in rows]
 
 @app.post("/api/tables/{table_id}/sessions")
-def create_session(table_id: int, session: SessionCreate):
+def create_session(table_id: int, session: SessionCreate, x_user_id: str = Header(...)):
+    check_table_access(table_id, int(x_user_id))
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -406,7 +444,8 @@ def create_session_log(session_id: int, log: SessionLogCreate, x_user_id: str = 
 # --- TABLE ITEMS (GM TEMPLATES) ENDPOINTS ---
 
 @app.get("/api/tables/{table_id}/items")
-def get_table_items(table_id: int):
+def get_table_items(table_id: int, x_user_id: str = Header(...)):
+    check_table_access(table_id, int(x_user_id))
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, table_id, item_name, description, weight FROM table_items WHERE table_id = ?", (table_id,))
@@ -415,7 +454,8 @@ def get_table_items(table_id: int):
     return [{"id": r[0], "table_id": r[1], "item_name": r[2], "description": r[3], "weight": r[4]} for r in rows]
 
 @app.post("/api/tables/{table_id}/items")
-def create_table_item(table_id: int, item: TableItemCreate):
+def create_table_item(table_id: int, item: TableItemCreate, x_user_id: str = Header(...)):
+    check_table_access(table_id, int(x_user_id))
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -480,5 +520,375 @@ def delete_session_log(log_id: int):
         cursor.execute("DELETE FROM session_logs WHERE id = ?", (log_id,))
         conn.commit()
         return {"message": "Mensagem do diário removida."}
+    finally:
+        conn.close()
+
+# --- FRIENDSHIP & NOTIFICATION ENDPOINTS ---
+
+class FriendRequestSend(BaseModel):
+    username: str
+
+@app.post("/api/friends/request")
+def send_friend_request(req: FriendRequestSend, x_user_id: str = Header(...)):
+    sender_id = int(x_user_id)
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # Find receiver by username
+        cursor.execute("SELECT id FROM users WHERE username = ?", (req.username,))
+        row_receiver = cursor.fetchone()
+        if not row_receiver:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+        
+        receiver_id = row_receiver[0]
+        
+        if sender_id == receiver_id:
+            raise HTTPException(status_code=400, detail="Você não pode enviar convite de amizade para si mesmo.")
+        
+        # Check if already friends
+        u1, u2 = min(sender_id, receiver_id), max(sender_id, receiver_id)
+        cursor.execute("SELECT id FROM friendships WHERE user_id_1 = ? AND user_id_2 = ?", (u1, u2))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Vocês já são amigos.")
+        
+        # Check if there is already a pending request
+        cursor.execute("SELECT id, status, sender_id FROM friend_requests WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)",
+                       (sender_id, receiver_id, receiver_id, sender_id))
+        row_req = cursor.fetchone()
+        if row_req:
+            req_id, status, req_sender_id = row_req
+            if status == "pending":
+                if req_sender_id == sender_id:
+                    raise HTTPException(status_code=400, detail="Convite de amizade já enviado e pendente.")
+                else:
+                    raise HTTPException(status_code=400, detail="Este usuário já enviou um convite para você. Aceite-o na aba de pendentes.")
+            else:
+                raise HTTPException(status_code=400, detail="Já existe uma solicitação entre vocês.")
+
+        # Insert new request
+        cursor.execute("INSERT INTO friend_requests (sender_id, receiver_id, status) VALUES (?, ?, 'pending')", (sender_id, receiver_id))
+        conn.commit()
+        return {"message": "Solicitação de amizade enviada com sucesso."}
+    finally:
+        conn.close()
+
+@app.get("/api/friends/requests/pending")
+def get_pending_requests(x_user_id: str = Header(...)):
+    user_id = int(x_user_id)
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT fr.id, fr.sender_id, u.username 
+            FROM friend_requests fr
+            JOIN users u ON fr.sender_id = u.id
+            WHERE fr.receiver_id = ? AND fr.status = 'pending'
+        """, (user_id,))
+        rows = cursor.fetchall()
+        return [{"id": r[0], "sender_id": r[1], "username": r[2]} for r in rows]
+    finally:
+        conn.close()
+
+@app.post("/api/friends/requests/{request_id}/accept")
+def accept_friend_request(request_id: int, x_user_id: str = Header(...)):
+    user_id = int(x_user_id)
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # Find request
+        cursor.execute("SELECT sender_id, receiver_id FROM friend_requests WHERE id = ?", (request_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Solicitação de amizade não encontrada.")
+        
+        sender_id, receiver_id = row
+        if receiver_id != user_id:
+            raise HTTPException(status_code=403, detail="Você não tem permissão para aceitar este convite.")
+        
+        # Add to friendships
+        u1, u2 = min(sender_id, receiver_id), max(sender_id, receiver_id)
+        try:
+            cursor.execute("INSERT INTO friendships (user_id_1, user_id_2) VALUES (?, ?)", (u1, u2))
+        except sqlite3.IntegrityError:
+            pass # Already friends
+        
+        # Delete from friend_requests
+        cursor.execute("DELETE FROM friend_requests WHERE id = ?", (request_id,))
+        conn.commit()
+        return {"message": "Solicitação de amizade aceita."}
+    finally:
+        conn.close()
+
+@app.post("/api/friends/requests/{request_id}/decline")
+def decline_friend_request(request_id: int, x_user_id: str = Header(...)):
+    user_id = int(x_user_id)
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT receiver_id FROM friend_requests WHERE id = ?", (request_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Solicitação de amizade não encontrada.")
+        
+        if row[0] != user_id:
+            raise HTTPException(status_code=403, detail="Você não tem permissão para recusar este convite.")
+        
+        cursor.execute("DELETE FROM friend_requests WHERE id = ?", (request_id,))
+        conn.commit()
+        return {"message": "Solicitação de amizade recusada."}
+    finally:
+        conn.close()
+
+@app.get("/api/friends")
+def get_friends(x_user_id: str = Header(...)):
+    user_id = int(x_user_id)
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT u.id, u.username 
+            FROM friendships f
+            JOIN users u ON (f.user_id_1 = u.id OR f.user_id_2 = u.id)
+            WHERE (f.user_id_1 = ? OR f.user_id_2 = ?) AND u.id != ?
+        """, (user_id, user_id, user_id))
+        rows = cursor.fetchall()
+        return [{"id": r[0], "username": r[1]} for r in rows]
+    finally:
+        conn.close()
+
+@app.delete("/api/friends/{friend_id}")
+def delete_friend(friend_id: int, x_user_id: str = Header(...)):
+    user_id = int(x_user_id)
+    u1, u2 = min(user_id, friend_id), max(user_id, friend_id)
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM friendships WHERE user_id_1 = ? AND user_id_2 = ?", (u1, u2))
+        conn.commit()
+        return {"message": "Amigo removido com sucesso."}
+    finally:
+        conn.close()
+
+# --- ADMIN ENDPOINTS ---
+
+def check_admin(user_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
+        if not row or row[0] != "admin":
+            raise HTTPException(status_code=403, detail="Acesso negado. Apenas o usuário 'admin' pode realizar esta ação.")
+    finally:
+        conn.close()
+
+@app.get("/api/admin/summary")
+def get_admin_summary(x_user_id: str = Header(...)):
+    uid = int(x_user_id)
+    check_admin(uid)
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # Users
+        cursor.execute("SELECT id, username FROM users")
+        users = [{"id": r[0], "username": r[1]} for r in cursor.fetchall()]
+        
+        # Tables
+        cursor.execute("""
+            SELECT t.id, t.name, t.game_master_id, u.username 
+            FROM tables t
+            JOIN users u ON t.game_master_id = u.id
+        """)
+        tables = [{"id": r[0], "name": r[1], "game_master_id": r[2], "game_master_username": r[3]} for r in cursor.fetchall()]
+        
+        # Characters
+        cursor.execute("""
+            SELECT c.id, c.name, c.classe, c.level, c.user_id, u.username, c.table_id, t.name
+            FROM characters c
+            JOIN users u ON c.user_id = u.id
+            JOIN tables t ON c.table_id = t.id
+        """)
+        characters = [{
+            "id": r[0], "name": r[1], "classe": r[2], "level": r[3],
+            "user_id": r[4], "username": r[5], "table_id": r[6], "table_name": r[7]
+        } for r in cursor.fetchall()]
+        
+        return {
+            "users": users,
+            "tables": tables,
+            "characters": characters
+        }
+    finally:
+        conn.close()
+
+@app.delete("/api/admin/users/{user_id}")
+def admin_delete_user(user_id: int, x_user_id: str = Header(...)):
+    uid = int(x_user_id)
+    check_admin(uid)
+    
+    if user_id == uid:
+        raise HTTPException(status_code=400, detail="Você não pode deletar a si mesmo.")
+        
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+        return {"message": "Usuário deletado pelo administrador."}
+    finally:
+        conn.close()
+
+@app.delete("/api/admin/tables/{table_id}")
+def admin_delete_table(table_id: int, x_user_id: str = Header(...)):
+    uid = int(x_user_id)
+    check_admin(uid)
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM tables WHERE id = ?", (table_id,))
+        conn.commit()
+        return {"message": "Mesa deletada pelo administrador."}
+    finally:
+        conn.close()
+
+@app.delete("/api/admin/characters/{char_id}")
+def admin_delete_character(char_id: int, x_user_id: str = Header(...)):
+    uid = int(x_user_id)
+    check_admin(uid)
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM characters WHERE id = ?", (char_id,))
+        conn.commit()
+        return {"message": "Personagem deletado pelo administrador."}
+    finally:
+        conn.close()
+
+# --- TABLE INVITATION ENDPOINTS ---
+
+class TableInviteSend(BaseModel):
+    username: str
+
+@app.post("/api/tables/{table_id}/invite")
+def invite_to_table(table_id: int, invite: TableInviteSend, x_user_id: str = Header(...)):
+    uid = int(x_user_id)
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # Check if caller is GM of this table
+        cursor.execute("SELECT game_master_id FROM tables WHERE id = ?", (table_id,))
+        row_table = cursor.fetchone()
+        if not row_table:
+            raise HTTPException(status_code=404, detail="Mesa não encontrada.")
+        if row_table[0] != uid:
+            raise HTTPException(status_code=403, detail="Apenas o mestre (GM) da mesa pode enviar convites.")
+        
+        # Check if target user exists
+        cursor.execute("SELECT id FROM users WHERE username = ?", (invite.username,))
+        row_user = cursor.fetchone()
+        if not row_user:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+        receiver_id = row_user[0]
+        
+        if receiver_id == uid:
+            raise HTTPException(status_code=400, detail="Você não precisa convidar a si mesmo (você é o mestre).")
+        
+        # Check if already invited or joined
+        cursor.execute("SELECT id, status FROM table_invitations WHERE table_id = ? AND user_id = ?", (table_id, receiver_id))
+        row_inv = cursor.fetchone()
+        if row_inv:
+            inv_id, status = row_inv
+            if status == "pending":
+                raise HTTPException(status_code=400, detail="Este jogador já possui um convite pendente para esta mesa.")
+            else:
+                raise HTTPException(status_code=400, detail="Este jogador já está participando desta mesa.")
+
+        # Create invite
+        cursor.execute("INSERT INTO table_invitations (table_id, user_id, status) VALUES (?, ?, 'pending')", (table_id, receiver_id))
+        conn.commit()
+        return {"message": "Convite enviado com sucesso."}
+    finally:
+        conn.close()
+
+@app.get("/api/tables/{table_id}/invitations")
+def get_table_invitations(table_id: int, x_user_id: str = Header(...)):
+    uid = int(x_user_id)
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # Check if GM
+        cursor.execute("SELECT game_master_id FROM tables WHERE id = ?", (table_id,))
+        row_table = cursor.fetchone()
+        if not row_table or row_table[0] != uid:
+            raise HTTPException(status_code=403, detail="Acesso negado.")
+        
+        cursor.execute("""
+            SELECT ti.id, u.username, ti.status 
+            FROM table_invitations ti
+            JOIN users u ON ti.user_id = u.id
+            WHERE ti.table_id = ?
+        """, (table_id,))
+        rows = cursor.fetchall()
+        return [{"id": r[0], "username": r[1], "status": r[2]} for r in rows]
+    finally:
+        conn.close()
+
+@app.get("/api/invitations")
+def get_user_table_invitations(x_user_id: str = Header(...)):
+    uid = int(x_user_id)
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT ti.id, t.name, u.username 
+            FROM table_invitations ti
+            JOIN tables t ON ti.table_id = t.id
+            JOIN users u ON t.game_master_id = u.id
+            WHERE ti.user_id = ? AND ti.status = 'pending'
+        """, (uid,))
+        rows = cursor.fetchall()
+        return [{"id": r[0], "table_name": r[1], "gm_username": r[2]} for r in rows]
+    finally:
+        conn.close()
+
+@app.post("/api/invitations/{invite_id}/accept")
+def accept_table_invitation(invite_id: int, x_user_id: str = Header(...)):
+    uid = int(x_user_id)
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT user_id FROM table_invitations WHERE id = ?", (invite_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Convite não encontrado.")
+        if row[0] != uid:
+            raise HTTPException(status_code=403, detail="Você não tem permissão para aceitar este convite.")
+        
+        cursor.execute("UPDATE table_invitations SET status = 'accepted' WHERE id = ?", (invite_id,))
+        conn.commit()
+        return {"message": "Convite aceito com sucesso."}
+    finally:
+        conn.close()
+
+@app.post("/api/invitations/{invite_id}/decline")
+def decline_table_invitation(invite_id: int, x_user_id: str = Header(...)):
+    uid = int(x_user_id)
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT user_id FROM table_invitations WHERE id = ?", (invite_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Convite não encontrado.")
+        if row[0] != uid:
+            raise HTTPException(status_code=403, detail="Você não tem permissão para recusar este convite.")
+        
+        cursor.execute("DELETE FROM table_invitations WHERE id = ?", (invite_id,))
+        conn.commit()
+        return {"message": "Convite recusado."}
     finally:
         conn.close()

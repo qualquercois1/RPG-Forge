@@ -62,7 +62,11 @@ function ForgePage() {
 
   // Auto-select first table once tables are loaded if none is selected
   useEffect(() => {
-    if (!tableId && tables.length > 0) {
+    const params = new URLSearchParams(window.location.search);
+    const queryTableId = params.get("tableId");
+    if (queryTableId) {
+      setTableId(queryTableId);
+    } else if (!tableId && tables.length > 0) {
       setTableId(String(tables[0].id));
     }
   }, [tables, tableId]);

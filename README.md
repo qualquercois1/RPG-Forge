@@ -19,7 +19,7 @@ Este projeto é dividido em duas partes principais:
    ```
 3. Instale as dependências necessárias:
    ```bash
-   pip install fastapi uvicorn pydantic bcrypt
+   pip install -r requirements.txt
    ```
 4. Execute o servidor de desenvolvimento:
    ```bash
