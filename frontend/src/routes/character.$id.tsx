@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate, notFound } from "@tanstack/react-router";
 import { ArrowLeft, MapPin, Ruler, Cake, Palette, Scroll, Heart } from "lucide-react";
-import { useCharacters, API_BASE } from "@/context/character-context";
+import { useCharacters, API_BASE, resolveImageUrl } from "@/context/character-context";
+import { ImageInput } from "@/components/ui/image-input";
 import { AttributeBox } from "@/components/character/AttributeBox";
 import { AttributeRadar } from "@/components/character/AttributeRadar";
 import { InventoryCard } from "@/components/inventory/InventoryCard";
@@ -122,17 +123,25 @@ function CharacterSheet() {
 
   const isDead = character.alive === 0;
 
+  const { allocateStat } = useCharacters();
+
   return (
     <div className="min-h-screen w-full">
       {/* Top bar */}
       <header className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between gap-3">
-          <Link
-            to="/tables"
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          <button
+            onClick={() => {
+              if (typeof window !== "undefined" && window.history.length > 1) {
+                window.history.back();
+              } else {
+                navigate({ to: "/tables" });
+              }
+            }}
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground bg-transparent border-0 cursor-pointer"
           >
             <ArrowLeft className="h-4 w-4" /> Voltar
-          </Link>
+          </button>
           <div className="flex items-center gap-2 min-w-0">
             <div className="font-display text-xl md:text-2xl truncate">{character.name}</div>
             <span className="hidden sm:inline text-xs px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/30">
@@ -160,8 +169,23 @@ function CharacterSheet() {
         {/* Left column — Identidade & HP & Lore */}
         <div className="space-y-6">
           <Card className="p-6">
-            <div className="text-xs uppercase tracking-[0.3em] text-primary mb-1">Identidade</div>
-            <h2 className="font-display text-3xl mb-4">{character.name}</h2>
+            <div className="flex items-center gap-4 mb-4">
+              {character.image_url ? (
+                <img
+                  src={resolveImageUrl(character.image_url)}
+                  alt={character.name}
+                  className="w-16 h-16 rounded-lg object-cover border border-primary/40 shadow shrink-0"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center font-display text-2xl font-bold text-primary shrink-0">
+                  {character.name[0]}
+                </div>
+              )}
+              <div>
+                <div className="text-xs uppercase tracking-[0.3em] text-primary">Identidade</div>
+                <h2 className="font-display text-3xl">{character.name}</h2>
+              </div>
+            </div>
 
             <dl className="grid grid-cols-1 gap-3 text-sm">
               <Row icon={Scroll} label="Mesa" value={character.table_name} />
@@ -172,6 +196,19 @@ function CharacterSheet() {
               <Row icon={Palette} label="Porte" value={character.physical} />
               <Row icon={Palette} label="Traços" value={character.color} />
             </dl>
+
+            {canEditLore && (
+              <div className="mt-4 border-t border-border pt-3">
+                <ImageInput
+                  label="Imagem / Avatar do Herói (Arquivo do Computador ou URL)"
+                  value={character.image_url || ""}
+                  onChange={(newUrl) => {
+                    updateCharacter(character.id, { image_url: newUrl });
+                  }}
+                  placeholder="https://exemplo.com/avatar.jpg"
+                />
+              </div>
+            )}
           </Card>
 
           {/* HP Card */}
@@ -202,54 +239,16 @@ function CharacterSheet() {
             </div>
 
             {isGM ? (
-              <div className="mt-6 space-y-3 border-t border-border pt-4">
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="Qtd"
-                    value={hpChange}
-                    onChange={(e) => setHpChange(e.target.value)}
-                    className="w-20 text-center h-8"
-                  />
-                  <Button 
-                    size="sm" 
-                    variant="destructive" 
-                    onClick={() => handleHpChange(-1)}
-                    className="flex-1 h-8 text-xs font-semibold"
-                  >
-                    Dano
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    onClick={() => handleHpChange(1)}
-                    className="flex-1 h-8 text-xs font-semibold"
-                  >
-                    Cura
-                  </Button>
-                </div>
-                
-                <div className="flex gap-2 justify-between items-center text-xs text-muted-foreground pt-1">
-                  <span>Nível atual: <strong>{character.level}</strong></span>
-                  <div className="flex gap-1">
-                    <Button 
-                      size="icon" 
-                      variant="outline" 
-                      onClick={() => handleLevelChange(-1)} 
-                      className="h-6 w-6 font-semibold"
-                      disabled={character.level <= 1}
-                    >
-                      -
-                    </Button>
-                    <Button 
-                      size="icon" 
-                      variant="outline" 
-                      onClick={() => handleLevelChange(1)} 
-                      className="h-6 w-6 font-semibold"
-                    >
-                      +
-                    </Button>
-                  </div>
-                </div>
+              <div className="mt-4 border-t border-border pt-3 flex justify-between items-center text-xs text-muted-foreground">
+                <span>Nível atual: <strong className="text-foreground">{character.level}</strong></span>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => handleLevelChange(1)} 
+                  className="h-7 px-2.5 text-xs font-semibold flex items-center gap-1 border-primary/40 text-primary hover:bg-primary/10"
+                >
+                  + Subir Nível
+                </Button>
               </div>
             ) : (
               <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-sm">
@@ -287,11 +286,34 @@ function CharacterSheet() {
 
         {/* Middle column — Atributos & Distribuição */}
         <div className="space-y-6">
-          <Card className="p-6">
-            <div className="text-xs uppercase tracking-[0.3em] text-primary mb-4">Atributos</div>
+          <Card className="p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <div className="text-xs uppercase tracking-[0.3em] text-primary">Atributos</div>
+              {(character.unallocated_points ?? 0) > 0 && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 animate-pulse">
+                  ✨ {(character.unallocated_points ?? 0)} Ponto(s) para distribuir!
+                </span>
+              )}
+            </div>
+            
             <div className="grid grid-cols-2 gap-3">
               {ATTR_ORDER.map((k) => (
-                <AttributeBox key={k} k={k} value={character.attributes[k]} />
+                <div key={k} className="relative group">
+                  <AttributeBox k={k} value={character.attributes[k]} />
+                  {(character.unallocated_points ?? 0) > 0 && canEditLore && (
+                    <Button
+                      size="icon"
+                      className="absolute top-1 right-1 h-6 w-6 text-xs bg-amber-500 hover:bg-amber-600 text-black font-bold rounded-full shadow"
+                      onClick={async () => {
+                        await allocateStat(character.id, k);
+                        fetchCharData();
+                      }}
+                      title={`Adicionar +1 ponto em ${k.toUpperCase()}`}
+                    >
+                      +
+                    </Button>
+                  )}
+                </div>
               ))}
             </div>
           </Card>

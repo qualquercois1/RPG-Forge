@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Backpack, Trash2, Plus } from "lucide-react";
-import { useCharacters } from "@/context/character-context";
+import { useCharacters, resolveImageUrl } from "@/context/character-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CapacityBar } from "./CapacityBar";
+import { ImageInput } from "@/components/ui/image-input";
 
 export function InventoryCard({ characterId }: { characterId: number }) {
   const {
@@ -27,6 +28,7 @@ export function InventoryCard({ characterId }: { characterId: number }) {
   const [desc, setDesc] = useState("");
   const [weight, setWeight] = useState("1.0");
   const [qty, setQty] = useState("1");
+  const [imageUrl, setImageUrl] = useState("");
   const [open, setOpen] = useState(false);
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -34,12 +36,17 @@ export function InventoryCard({ characterId }: { characterId: number }) {
     if (!name.trim()) return;
     const w = parseFloat(weight) || 0.0;
     const q = parseInt(qty) || 1;
-    await addInventoryItem(characterId, name.trim(), desc.trim(), w, q);
-    setName("");
-    setDesc("");
-    setWeight("1.0");
-    setQty("1");
-    setOpen(false);
+    const res = await addInventoryItem(characterId, name.trim(), desc.trim(), w, q, imageUrl.trim());
+    if (res.success) {
+      setName("");
+      setDesc("");
+      setWeight("1.0");
+      setQty("1");
+      setImageUrl("");
+      setOpen(false);
+    } else {
+      alert(res.error || "Erro ao adicionar item.");
+    }
   };
 
   const currentWeight = items.reduce((sum, it) => sum + ((it.weight || 0) * (it.quantity || 1)), 0);
@@ -69,6 +76,13 @@ export function InventoryCard({ characterId }: { characterId: number }) {
               key={it.id}
               className="group rounded-lg border border-border bg-card/40 p-3 flex items-start justify-between gap-3 hover:bg-card/75 transition-all"
             >
+              {it.image_url && (
+                <img
+                  src={resolveImageUrl(it.image_url)}
+                  alt={it.item_name}
+                  className="w-10 h-10 rounded object-cover border border-border/60 shrink-0"
+                />
+              )}
               <div className="min-w-0 flex-1">
                 <div className="font-medium text-sm text-foreground truncate">{it.item_name}</div>
                 {it.description && (
@@ -130,6 +144,13 @@ export function InventoryCard({ characterId }: { characterId: number }) {
                   placeholder="Ex: Causa +2 de dano físico."
                 />
               </div>
+              
+              <ImageInput
+                label="Imagem do Item (Arquivo do Computador ou URL)"
+                value={imageUrl}
+                onChange={setImageUrl}
+                placeholder="https://exemplo.com/item.jpg"
+              />
               
               <div className="grid grid-cols-2 gap-2">
                 <div>

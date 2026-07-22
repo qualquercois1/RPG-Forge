@@ -1,5 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
 import { Scroll, Plus, Hammer, User, Check, X } from "lucide-react";
 import { useCharacters } from "@/context/character-context";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ export const Route = createFileRoute("/_app/tables")({
 });
 
 function TablesPage() {
+  const navigate = useNavigate();
   const { 
     tables, 
     addTable, 
@@ -25,21 +26,39 @@ function TablesPage() {
     characters, 
     tableInvitations, 
     acceptTableInvitation, 
-    declineTableInvitation 
+    declineTableInvitation,
+    fetchData,
+    fetchTableInvitations
   } = useCharacters();
   const [tableName, setTableName] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // Auto-refresh tables and invitations when selecting page & polling every 3 seconds
+  useEffect(() => {
+    fetchData();
+    fetchTableInvitations();
+    const interval = setInterval(() => {
+      fetchData();
+      fetchTableInvitations();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [fetchData, fetchTableInvitations]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (!tableName.trim()) return;
 
-    const success = await addTable(tableName.trim());
-    if (success) {
+    setLoading(true);
+    const res = await addTable(tableName.trim());
+    setLoading(false);
+
+    if (res.success && res.table) {
       setTableName("");
+      navigate({ to: "/table/$id", params: { id: String(res.table.id) } });
     } else {
-      setError("Erro ao criar a mesa. Tente novamente.");
+      setError(res.error || "Erro ao criar a mesa. Tente novamente.");
     }
   };
 

@@ -14,9 +14,12 @@ const iconForClass = (c: string) => {
   return Swords;
 };
 
+import { resolveImageUrl } from "@/context/character-context";
+
 export function CharacterCard({ character }: { character: Character }) {
   const Icon = iconForClass(character.classe);
   const isDead = character.alive === 0;
+  const avatarUrl = resolveImageUrl(character.image_url);
 
   return (
     <Card 
@@ -40,12 +43,18 @@ export function CharacterCard({ character }: { character: Character }) {
 
       <div className="flex items-start gap-4">
         <div className={cn(
-          "grid place-items-center h-16 w-16 rounded-lg border",
+          "grid place-items-center h-16 w-16 rounded-lg border overflow-hidden shrink-0",
           isDead 
             ? "bg-destructive/5 text-destructive border-destructive/20" 
             : "bg-primary/10 text-primary border-primary/30"
         )}>
-          {isDead ? <Skull className="h-8 w-8" /> : <Icon className="h-8 w-8" />}
+          {avatarUrl ? (
+            <img src={avatarUrl} alt={character.name} className="w-full h-full object-cover" />
+          ) : isDead ? (
+            <Skull className="h-8 w-8" />
+          ) : (
+            <Icon className="h-8 w-8" />
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <div className="font-display text-2xl leading-tight truncate">{character.name}</div>

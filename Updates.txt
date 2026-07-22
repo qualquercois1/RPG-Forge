@@ -1,0 +1,5 @@
+Não esta atualizando a mochila quando um item é atribuido(so se abrir a ficha modal);
+Tirar a cura e o dano da ficha detalhada;
+A ficha de criação está vindo com a mesa errada selecionada quando tem mais de uma mesa existente;
+Quando o personagem vai aumentar seus atributos está com delay;
+Retirar a opção do mestre diminuir o nivel de um personagem (só pode aumentar);

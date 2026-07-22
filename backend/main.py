@@ -1,6 +1,10 @@
 import sqlite3
-from fastapi import FastAPI, HTTPException, Header
+import os
+import uuid
+import shutil
+from fastapi import FastAPI, HTTPException, Header, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from database import create_tables, get_connection
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field
@@ -9,18 +13,40 @@ from typing import Optional, List
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Iniciando o Servidor... Verificando o Banco de dados...")
+    os.makedirs("uploads", exist_ok=True)
     create_tables()
     yield
 
 app = FastAPI(lifespan=lifespan)
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def add_private_network_header(request, call_next):
+    response = await call_next(request)
+    if request.headers.get("access-control-request-private-network") or request.method == "OPTIONS":
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
+
+@app.post("/api/upload")
+def upload_file(file: UploadFile = File(...)):
+    os.makedirs("uploads", exist_ok=True)
+    ext = os.path.splitext(file.filename)[1] if file.filename else ".png"
+    if not ext or len(ext) > 10:
+        ext = ".png"
+    filename = f"{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join("uploads", filename)
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    return {"url": f"/uploads/{filename}"}
 
 class UserAuth(BaseModel):
     username: str
@@ -34,6 +60,7 @@ class StartingItem(BaseModel):
     description: str
     weight: float = 0.0
     quantity: int = 1
+    image_url: Optional[str] = ""
 
 class CharacterCreate(BaseModel):
     table_id: int
@@ -56,6 +83,8 @@ class CharacterCreate(BaseModel):
     alive: int = 1
     hp: Optional[int] = None
     max_hp: Optional[int] = None
+    image_url: Optional[str] = ""
+    unallocated_points: int = 0
     starting_items: Optional[List[StartingItem]] = []
 
     class Config:
@@ -67,17 +96,24 @@ class CharacterUpdate(BaseModel):
     hp: Optional[int] = None
     max_hp: Optional[int] = None
     alive: Optional[int] = None
+    image_url: Optional[str] = None
+    unallocated_points: Optional[int] = None
+
+class AllocateStat(BaseModel):
+    attribute: str
 
 class InventoryItemCreate(BaseModel):
     item_name: str
     description: str
     weight: float = 0.0
     quantity: int = 1
+    image_url: Optional[str] = ""
 
 class TableItemCreate(BaseModel):
     item_name: str
     description: str
     weight: float = 0.0
+    image_url: Optional[str] = ""
 
 class AssignTableItem(BaseModel):
     character_id: int
@@ -89,6 +125,8 @@ class SessionCreate(BaseModel):
 
 class SessionLogCreate(BaseModel):
     event_text: str
+    event_type: Optional[str] = "normal"
+    item_data: Optional[str] = None
 
 @app.post("/api/register")
 def register(user_auth: UserAuth):
@@ -186,10 +224,12 @@ def get_characters(x_user_id: str = Header(...)):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT c.id, c.user_id, c.table_id, c.name, c.classe, c.level, c.race, c.region, c.age, c.height, c.physical, c.color, c.lore,
-               c.str, c.agi, c.int, c.vit, c.sur, c.mag, c.alive, c.hp, c.max_hp, t.name as table_name
+               c.str, c.agi, c.int, c.vit, c.sur, c.mag, c.alive, c.hp, c.max_hp, t.name as table_name,
+               COALESCE(c.image_url, '') as image_url, COALESCE(c.unallocated_points, 0) as unallocated_points
         FROM characters c
         JOIN tables t ON c.table_id = t.id
         WHERE c.user_id = ?
+        ORDER BY c.alive DESC, c.id DESC
     """, (int(x_user_id),))
     rows = cursor.fetchall()
     conn.close()
@@ -200,7 +240,7 @@ def get_characters(x_user_id: str = Header(...)):
             "id": r[0], "user_id": r[1], "table_id": r[2], "name": r[3], "classe": r[4], "level": r[5],
             "race": r[6], "region": r[7], "age": r[8], "height": r[9], "physical": r[10], "color": r[11], "lore": r[12],
             "attributes": {"str": r[13], "agi": r[14], "int": r[15], "vit": r[16], "sur": r[17], "mag": r[18]},
-            "alive": r[19], "hp": r[20], "max_hp": r[21], "table_name": r[22]
+            "alive": r[19], "hp": r[20], "max_hp": r[21], "table_name": r[22], "image_url": r[23], "unallocated_points": r[24]
         })
     return chars
 
@@ -210,7 +250,8 @@ def get_character(char_id: int):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT c.id, c.user_id, c.table_id, c.name, c.classe, c.level, c.race, c.region, c.age, c.height, c.physical, c.color, c.lore,
-               c.str, c.agi, c.int, c.vit, c.sur, c.mag, c.alive, c.hp, c.max_hp, t.name as table_name, u.username
+               c.str, c.agi, c.int, c.vit, c.sur, c.mag, c.alive, c.hp, c.max_hp, t.name as table_name, u.username,
+               COALESCE(c.image_url, '') as image_url, COALESCE(c.unallocated_points, 0) as unallocated_points
         FROM characters c
         JOIN tables t ON c.table_id = t.id
         JOIN users u ON c.user_id = u.id
@@ -224,7 +265,8 @@ def get_character(char_id: int):
         "id": r[0], "user_id": r[1], "table_id": r[2], "name": r[3], "classe": r[4], "level": r[5],
         "race": r[6], "region": r[7], "age": r[8], "height": r[9], "physical": r[10], "color": r[11], "lore": r[12],
         "attributes": {"str": r[13], "agi": r[14], "int": r[15], "vit": r[16], "sur": r[17], "mag": r[18]},
-        "alive": r[19], "hp": r[20], "max_hp": r[21], "table_name": r[22], "owner_username": r[23]
+        "alive": r[19], "hp": r[20], "max_hp": r[21], "table_name": r[22], "owner_username": r[23],
+        "image_url": r[24], "unallocated_points": r[25]
     }
 
 @app.get("/api/tables/{table_id}/characters")
@@ -234,10 +276,12 @@ def get_table_characters(table_id: int, x_user_id: str = Header(...)):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT c.id, c.user_id, c.table_id, c.name, c.classe, c.level, c.race, c.region, c.age, c.height, c.physical, c.color, c.lore,
-               c.str, c.agi, c.int, c.vit, c.sur, c.mag, c.alive, c.hp, c.max_hp, u.username
+               c.str, c.agi, c.int, c.vit, c.sur, c.mag, c.alive, c.hp, c.max_hp, u.username,
+               COALESCE(c.image_url, '') as image_url, COALESCE(c.unallocated_points, 0) as unallocated_points
         FROM characters c
         JOIN users u ON c.user_id = u.id
         WHERE c.table_id = ?
+        ORDER BY c.alive DESC, c.id ASC
     """, (table_id,))
     rows = cursor.fetchall()
     conn.close()
@@ -248,7 +292,8 @@ def get_table_characters(table_id: int, x_user_id: str = Header(...)):
             "id": r[0], "user_id": r[1], "table_id": r[2], "name": r[3], "classe": r[4], "level": r[5],
             "race": r[6], "region": r[7], "age": r[8], "height": r[9], "physical": r[10], "color": r[11], "lore": r[12],
             "attributes": {"str": r[13], "agi": r[14], "int": r[15], "vit": r[16], "sur": r[17], "mag": r[18]},
-            "alive": r[19], "hp": r[20], "max_hp": r[21], "owner_username": r[22]
+            "alive": r[19], "hp": r[20], "max_hp": r[21], "owner_username": r[22],
+            "image_url": r[23], "unallocated_points": r[24]
         })
     return chars
 
@@ -259,7 +304,6 @@ def create_character(char: CharacterCreate, x_user_id: str = Header(...)):
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        # 1. Obter game_master_id da mesa
         cursor.execute("SELECT game_master_id FROM tables WHERE id = ?", (char.table_id,))
         row_table = cursor.fetchone()
         if not row_table:
@@ -267,7 +311,6 @@ def create_character(char: CharacterCreate, x_user_id: str = Header(...)):
         
         gm_id = row_table[0]
 
-        # 2. Se NÃO for o mestre (GM), verificar se já possui um personagem VIVO nesta mesa
         if uid != gm_id:
             cursor.execute("SELECT count(*) FROM characters WHERE user_id = ? AND table_id = ? AND alive = 1", (uid, char.table_id))
             count = cursor.fetchone()[0]
@@ -277,18 +320,17 @@ def create_character(char: CharacterCreate, x_user_id: str = Header(...)):
                     detail="Você já possui um personagem VIVO nesta mesa. Só é permitido um por jogador até que ele morra."
                 )
 
-        # 3. Definir Vida (HP) baseado na Vitalidade se não fornecido
         max_hp = char.max_hp if char.max_hp is not None else char.vit * 10
         hp = char.hp if char.hp is not None else max_hp
 
         cursor.execute("""
             INSERT INTO characters (
                 user_id, table_id, name, classe, level, race, region, age, height, physical, color, lore,
-                str, agi, int, vit, sur, mag, alive, hp, max_hp
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                str, agi, int, vit, sur, mag, alive, hp, max_hp, image_url, unallocated_points
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             uid, char.table_id, char.name, char.classe, char.level, char.race, char.region, char.age, char.height, char.physical, char.color, char.lore,
-            char.strength, char.agi, char.intel, char.vit, char.sur, char.mag, char.alive, hp, max_hp
+            char.strength, char.agi, char.intel, char.vit, char.sur, char.mag, char.alive, hp, max_hp, char.image_url or "", char.unallocated_points or 0
         ))
         conn.commit()
         char_id = cursor.lastrowid
@@ -296,9 +338,9 @@ def create_character(char: CharacterCreate, x_user_id: str = Header(...)):
         if char.starting_items:
             for it in char.starting_items:
                 cursor.execute("""
-                    INSERT INTO inventory (character_id, item_name, description, weight, quantity)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (char_id, it.item_name, it.description, it.weight, it.quantity))
+                    INSERT INTO inventory (character_id, item_name, description, weight, quantity, image_url)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (char_id, it.item_name, it.description, it.weight, it.quantity, it.image_url or ""))
             conn.commit()
 
         return {"id": char_id, "message": "Personagem criado com sucesso."}
@@ -310,17 +352,30 @@ def update_character(char_id: int, char_up: CharacterUpdate):
     conn = get_connection()
     cursor = conn.cursor()
     try:
+        cursor.execute("SELECT level, COALESCE(unallocated_points, 0) FROM characters WHERE id = ?", (char_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Personagem não encontrado.")
+        old_level, old_unallocated = row[0], row[1]
+
         if char_up.lore is not None:
             cursor.execute("UPDATE characters SET lore = ? WHERE id = ?", (char_up.lore, char_id))
+        
         if char_up.level is not None:
-            cursor.execute("UPDATE characters SET level = ? WHERE id = ?", (char_up.level, char_id))
+            diff = char_up.level - old_level
+            new_unallocated = old_unallocated + (diff * 3 if diff > 0 else 0)
+            cursor.execute("UPDATE characters SET level = ?, unallocated_points = ? WHERE id = ?", (char_up.level, new_unallocated, char_id))
+
+        if char_up.unallocated_points is not None:
+            cursor.execute("UPDATE characters SET unallocated_points = ? WHERE id = ?", (char_up.unallocated_points, char_id))
+
+        if char_up.image_url is not None:
+            cursor.execute("UPDATE characters SET image_url = ? WHERE id = ?", (char_up.image_url, char_id))
+
         if char_up.hp is not None:
-            hp_val = char_up.hp
-            # Se a vida chegar a 0, define vivo como falso (0) automaticamente
-            alive_val = 0 if hp_val <= 0 else 1
+            cursor.execute("UPDATE characters SET hp = ? WHERE id = ?", (char_up.hp, char_id))
             if char_up.alive is not None:
-                alive_val = char_up.alive
-            cursor.execute("UPDATE characters SET hp = ?, alive = ? WHERE id = ?", (hp_val, alive_val, char_id))
+                cursor.execute("UPDATE characters SET alive = ? WHERE id = ?", (char_up.alive, char_id))
         elif char_up.alive is not None:
             cursor.execute("UPDATE characters SET alive = ? WHERE id = ?", (char_up.alive, char_id))
         
@@ -329,6 +384,33 @@ def update_character(char_id: int, char_up: CharacterUpdate):
 
         conn.commit()
         return {"message": "Personagem atualizado com sucesso."}
+    finally:
+        conn.close()
+
+@app.post("/api/characters/{char_id}/allocate-stat")
+def allocate_stat(char_id: int, req: AllocateStat):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT COALESCE(unallocated_points, 0), str, agi, int, vit, sur, mag, max_hp FROM characters WHERE id = ?", (char_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Personagem não encontrado.")
+        unallocated, s, a, i, v, su, m, max_hp = row
+        if unallocated <= 0:
+            raise HTTPException(status_code=400, detail="Sem pontos disponíveis para atribuir.")
+
+        attr = req.attribute.lower()
+        if attr not in ["str", "agi", "int", "vit", "sur", "mag"]:
+            raise HTTPException(status_code=400, detail="Atributo inválido.")
+
+        cursor.execute(f"UPDATE characters SET {attr} = {attr} + 1, unallocated_points = unallocated_points - 1 WHERE id = ?", (char_id,))
+
+        if attr == "vit":
+            cursor.execute("UPDATE characters SET max_hp = max_hp + 10, hp = hp + 10 WHERE id = ?", (char_id,))
+
+        conn.commit()
+        return {"message": f"Ponto adicionado em {attr.upper()} com sucesso."}
     finally:
         conn.close()
 
@@ -346,35 +428,54 @@ def delete_character(char_id: int):
 
 # --- INVENTORY ENDPOINTS ---
 
+def check_inventory_weight_limit(cursor, char_id: int, added_weight: float):
+    cursor.execute("SELECT name, str FROM characters WHERE id = ?", (char_id,))
+    row_char = cursor.fetchone()
+    if not row_char:
+        raise HTTPException(status_code=404, detail="Personagem não encontrado.")
+    
+    char_name, str_val = row_char
+    max_weight = float(str_val) * 3.0
+
+    cursor.execute("SELECT SUM(weight * quantity) FROM inventory WHERE character_id = ?", (char_id,))
+    row_inv = cursor.fetchone()
+    current_weight = float(row_inv[0]) if (row_inv and row_inv[0] is not None) else 0.0
+
+    if (current_weight + added_weight) > (max_weight + 0.001):
+        raise HTTPException(
+            status_code=400,
+            detail=f"O personagem '{char_name}' não consegue carregar este peso! Limite de carga excedido (Atual: {current_weight:.1f}kg + Item: {added_weight:.1f}kg / Máx: {max_weight:.1f}kg)."
+        )
+
 @app.get("/api/characters/{char_id}/inventory")
 def get_inventory(char_id: int):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, item_name, description, weight, quantity FROM inventory WHERE character_id = ?", (char_id,))
+    cursor.execute("SELECT id, item_name, description, weight, quantity, COALESCE(image_url, '') FROM inventory WHERE character_id = ?", (char_id,))
     rows = cursor.fetchall()
     conn.close()
-    return [{"id": r[0], "item_name": r[1], "description": r[2], "weight": r[3], "quantity": r[4]} for r in rows]
+    return [{"id": r[0], "item_name": r[1], "description": r[2], "weight": r[3], "quantity": r[4], "image_url": r[5]} for r in rows]
 
 @app.post("/api/characters/{char_id}/inventory")
 def add_inventory_item(char_id: int, item: InventoryItemCreate):
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        # Check if item with same name exists for this character
+        check_inventory_weight_limit(cursor, char_id, float(item.weight) * int(item.quantity))
         cursor.execute("SELECT id, quantity FROM inventory WHERE character_id = ? AND item_name = ?", (char_id, item.item_name))
         row = cursor.fetchone()
         if row:
             inv_id, qty = row
             new_qty = qty + item.quantity
-            cursor.execute("UPDATE inventory SET quantity = ? WHERE id = ?", (new_qty, inv_id))
+            cursor.execute("UPDATE inventory SET quantity = ?, image_url = COALESCE(NULLIF(?, ''), image_url) WHERE id = ?", (new_qty, item.image_url or "", inv_id))
             conn.commit()
-            return {"id": inv_id, "item_name": item.item_name, "description": item.description, "weight": item.weight, "quantity": new_qty}
+            return {"id": inv_id, "item_name": item.item_name, "description": item.description, "weight": item.weight, "quantity": new_qty, "image_url": item.image_url or ""}
         else:
-            cursor.execute("INSERT INTO inventory (character_id, item_name, description, weight, quantity) VALUES (?, ?, ?, ?, ?)", 
-                           (char_id, item.item_name, item.description, item.weight, item.quantity))
+            cursor.execute("INSERT INTO inventory (character_id, item_name, description, weight, quantity, image_url) VALUES (?, ?, ?, ?, ?, ?)", 
+                           (char_id, item.item_name, item.description, item.weight, item.quantity, item.image_url or ""))
             conn.commit()
             item_id = cursor.lastrowid
-            return {"id": item_id, "item_name": item.item_name, "description": item.description, "weight": item.weight, "quantity": item.quantity}
+            return {"id": item_id, "item_name": item.item_name, "description": item.description, "weight": item.weight, "quantity": item.quantity, "image_url": item.image_url or ""}
     finally:
         conn.close()
 
@@ -418,26 +519,25 @@ def create_session(table_id: int, session: SessionCreate, x_user_id: str = Heade
 def get_session_logs(session_id: int):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, session_id, user_id, username, event_text, created_at FROM session_logs WHERE session_id = ? ORDER BY id ASC", (session_id,))
+    cursor.execute("SELECT id, session_id, user_id, username, event_text, created_at, COALESCE(event_type, 'normal'), COALESCE(item_data, '') FROM session_logs WHERE session_id = ? ORDER BY id ASC", (session_id,))
     rows = cursor.fetchall()
     conn.close()
-    return [{"id": r[0], "session_id": r[1], "user_id": r[2], "username": r[3], "event_text": r[4], "created_at": r[5]} for r in rows]
+    return [{"id": r[0], "session_id": r[1], "user_id": r[2], "username": r[3], "event_text": r[4], "created_at": r[5], "event_type": r[6], "item_data": r[7]} for r in rows]
 
 @app.post("/api/sessions/{session_id}/logs")
 def create_session_log(session_id: int, log: SessionLogCreate, x_user_id: str = Header(...)):
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        # Obter nome do usuário
         cursor.execute("SELECT username FROM users WHERE id = ?", (int(x_user_id),))
         row = cursor.fetchone()
         username = row[0] if row else "Desconhecido"
 
-        cursor.execute("INSERT INTO session_logs (session_id, user_id, username, event_text) VALUES (?, ?, ?, ?)", 
-                       (session_id, int(x_user_id), username, log.event_text))
+        cursor.execute("INSERT INTO session_logs (session_id, user_id, username, event_text, event_type, item_data) VALUES (?, ?, ?, ?, ?, ?)", 
+                       (session_id, int(x_user_id), username, log.event_text, log.event_type or "normal", log.item_data or ""))
         conn.commit()
         log_id = cursor.lastrowid
-        return {"id": log_id, "session_id": session_id, "user_id": int(x_user_id), "username": username, "event_text": log.event_text}
+        return {"id": log_id, "session_id": session_id, "user_id": int(x_user_id), "username": username, "event_text": log.event_text, "event_type": log.event_type or "normal", "item_data": log.item_data or ""}
     finally:
         conn.close()
 
@@ -448,10 +548,10 @@ def get_table_items(table_id: int, x_user_id: str = Header(...)):
     check_table_access(table_id, int(x_user_id))
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, table_id, item_name, description, weight FROM table_items WHERE table_id = ?", (table_id,))
+    cursor.execute("SELECT id, table_id, item_name, description, weight, COALESCE(image_url, '') FROM table_items WHERE table_id = ?", (table_id,))
     rows = cursor.fetchall()
     conn.close()
-    return [{"id": r[0], "table_id": r[1], "item_name": r[2], "description": r[3], "weight": r[4]} for r in rows]
+    return [{"id": r[0], "table_id": r[1], "item_name": r[2], "description": r[3], "weight": r[4], "image_url": r[5]} for r in rows]
 
 @app.post("/api/tables/{table_id}/items")
 def create_table_item(table_id: int, item: TableItemCreate, x_user_id: str = Header(...)):
@@ -459,11 +559,11 @@ def create_table_item(table_id: int, item: TableItemCreate, x_user_id: str = Hea
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("INSERT INTO table_items (table_id, item_name, description, weight) VALUES (?, ?, ?, ?)",
-                       (table_id, item.item_name, item.description, item.weight))
+        cursor.execute("INSERT INTO table_items (table_id, item_name, description, weight, image_url) VALUES (?, ?, ?, ?, ?)",
+                       (table_id, item.item_name, item.description, item.weight, item.image_url or ""))
         conn.commit()
         item_id = cursor.lastrowid
-        return {"id": item_id, "table_id": table_id, "item_name": item.item_name, "description": item.description, "weight": item.weight}
+        return {"id": item_id, "table_id": table_id, "item_name": item.item_name, "description": item.description, "weight": item.weight, "image_url": item.image_url or ""}
     finally:
         conn.close()
 
@@ -472,30 +572,30 @@ def assign_table_item(table_id: int, item_id: int, assign: AssignTableItem):
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT item_name, description, weight FROM table_items WHERE id = ? AND table_id = ?", (item_id, table_id))
+        cursor.execute("SELECT item_name, description, weight, COALESCE(image_url, '') FROM table_items WHERE id = ? AND table_id = ?", (item_id, table_id))
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Item da mesa não encontrado.")
         
-        item_name, description, weight = row
+        item_name, description, weight, image_url = row
+        check_inventory_weight_limit(cursor, assign.character_id, float(weight) * int(assign.quantity))
 
-        # Check if item with same name exists for this character
         cursor.execute("SELECT id, quantity FROM inventory WHERE character_id = ? AND item_name = ?", (assign.character_id, item_name))
         row_inv = cursor.fetchone()
         if row_inv:
             inv_id, qty = row_inv
             new_qty = qty + assign.quantity
-            cursor.execute("UPDATE inventory SET quantity = ? WHERE id = ?", (new_qty, inv_id))
+            cursor.execute("UPDATE inventory SET quantity = ?, image_url = COALESCE(NULLIF(?, ''), image_url) WHERE id = ?", (new_qty, image_url, inv_id))
             conn.commit()
-            return {"id": inv_id, "character_id": assign.character_id, "item_name": item_name, "description": description, "weight": weight, "quantity": new_qty}
+            return {"id": inv_id, "character_id": assign.character_id, "item_name": item_name, "description": description, "weight": weight, "quantity": new_qty, "image_url": image_url}
         else:
             cursor.execute("""
-                INSERT INTO inventory (character_id, item_name, description, weight, quantity)
-                VALUES (?, ?, ?, ?, ?)
-            """, (assign.character_id, item_name, description, weight, assign.quantity))
+                INSERT INTO inventory (character_id, item_name, description, weight, quantity, image_url)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (assign.character_id, item_name, description, weight, assign.quantity, image_url))
             conn.commit()
             inv_id = cursor.lastrowid
-            return {"id": inv_id, "character_id": assign.character_id, "item_name": item_name, "description": description, "weight": weight, "quantity": assign.quantity}
+            return {"id": inv_id, "character_id": assign.character_id, "item_name": item_name, "description": description, "weight": weight, "quantity": assign.quantity, "image_url": image_url}
     finally:
         conn.close()
 

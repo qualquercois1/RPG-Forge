@@ -5,41 +5,41 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { useCharacters } from "@/context/character-context";
-
-export const Route = createFileRoute("/register")({
-  head: () => ({
-    meta: [
-      { title: "Registrar — Forja" },
-      { name: "description", content: "Crie sua conta na guilda de heróis." },
-    ],
-  }),
-  component: RegisterPage,
-});
-
-function RegisterPage() {
-  const navigate = useNavigate();
-  const { user: loggedInUser } = useCharacters();
-  const [user, setUser] = useState("");
-  const [pass, setPass] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (loggedInUser) {
-      navigate({ to: "/tables" });
-    }
-  }, [loggedInUser, navigate]);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    if (pass !== confirm) {
-      setError("As senhas não coincidem.");
-      return;
-    }
-    try {
-      const response = await fetch("http://localhost:8000/api/register", {
+import { useCharacters, API_BASE } from "@/context/character-context";
+ 
+ export const Route = createFileRoute("/register")({
+   head: () => ({
+     meta: [
+       { title: "Registrar — Forja" },
+       { name: "description", content: "Crie sua conta na guilda de heróis." },
+     ],
+   }),
+   component: RegisterPage,
+ });
+ 
+ function RegisterPage() {
+   const navigate = useNavigate();
+   const { user: loggedInUser } = useCharacters();
+   const [user, setUser] = useState("");
+   const [pass, setPass] = useState("");
+   const [confirm, setConfirm] = useState("");
+   const [error, setError] = useState("");
+ 
+   useEffect(() => {
+     if (loggedInUser) {
+       navigate({ to: "/tables" });
+     }
+   }, [loggedInUser, navigate]);
+ 
+   const submit = async (e: React.FormEvent) => {
+     e.preventDefault();
+     setError("");
+     if (pass !== confirm) {
+       setError("As senhas não coincidem.");
+       return;
+     }
+     try {
+       const response = await fetch(`${API_BASE}/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

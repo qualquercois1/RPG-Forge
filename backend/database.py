@@ -178,6 +178,41 @@ def create_table_invitations_table():
     conn.commit()
     conn.close()
 
+def run_migrations():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Characters table columns
+    cursor.execute("PRAGMA table_info(characters)")
+    cols = [row[1] for row in cursor.fetchall()]
+    if 'image_url' not in cols:
+        cursor.execute("ALTER TABLE characters ADD COLUMN image_url TEXT")
+    if 'unallocated_points' not in cols:
+        cursor.execute("ALTER TABLE characters ADD COLUMN unallocated_points INTEGER DEFAULT 0")
+
+    # Inventory table columns
+    cursor.execute("PRAGMA table_info(inventory)")
+    cols = [row[1] for row in cursor.fetchall()]
+    if 'image_url' not in cols:
+        cursor.execute("ALTER TABLE inventory ADD COLUMN image_url TEXT")
+
+    # Table items table columns
+    cursor.execute("PRAGMA table_info(table_items)")
+    cols = [row[1] for row in cursor.fetchall()]
+    if 'image_url' not in cols:
+        cursor.execute("ALTER TABLE table_items ADD COLUMN image_url TEXT")
+
+    # Session logs table columns
+    cursor.execute("PRAGMA table_info(session_logs)")
+    cols = [row[1] for row in cursor.fetchall()]
+    if 'event_type' not in cols:
+        cursor.execute("ALTER TABLE session_logs ADD COLUMN event_type TEXT DEFAULT 'normal'")
+    if 'item_data' not in cols:
+        cursor.execute("ALTER TABLE session_logs ADD COLUMN item_data TEXT")
+
+    conn.commit()
+    conn.close()
+
 def create_tables():
     create_users_table()
     create_tables_table()
@@ -188,3 +223,4 @@ def create_tables():
     create_friendships_table()
     create_friend_requests_table()
     create_table_invitations_table()
+    run_migrations()

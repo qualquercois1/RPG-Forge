@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Users, UserPlus, Check, X, UserX, Send } from "lucide-react";
 import { useCharacters } from "@/context/character-context";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,8 @@ function FriendsPage() {
   const {
     friends,
     pendingRequests,
+    fetchFriends,
+    fetchPendingRequests,
     sendFriendRequest,
     acceptFriendRequest,
     declineFriendRequest,
@@ -31,6 +33,17 @@ function FriendsPage() {
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Reload friends and pending requests on mount / tab select & poll every 3s
+  useEffect(() => {
+    fetchFriends();
+    fetchPendingRequests();
+    const interval = setInterval(() => {
+      fetchFriends();
+      fetchPendingRequests();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [fetchFriends, fetchPendingRequests]);
 
   const handleSendRequest = async (e: React.FormEvent) => {
     e.preventDefault();

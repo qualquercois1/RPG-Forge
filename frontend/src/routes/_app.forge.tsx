@@ -23,7 +23,8 @@ import {
   type AttrKey,
   type Attributes,
 } from "@/lib/mock-data";
-import { useCharacters } from "@/context/character-context";
+import { useCharacters, resolveImageUrl } from "@/context/character-context";
+import { ImageInput } from "@/components/ui/image-input";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/forge")({
@@ -38,7 +39,7 @@ export const Route = createFileRoute("/_app/forge")({
 
 function ForgePage() {
   const navigate = useNavigate();
-  const { addCharacter, tables } = useCharacters();
+  const { addCharacter, tables, characters, user } = useCharacters();
 
   const [name, setName] = useState("");
   const [race, setRace] = useState(RACES[0]);
@@ -49,27 +50,44 @@ function ForgePage() {
   const [color, setColor] = useState("");
   const [region, setRegion] = useState("");
   const [lore, setLore] = useState("");
-  const [tableId, setTableId] = useState<string>(tables[0]?.id ? String(tables[0].id) : "");
+  const [imageUrl, setImageUrl] = useState("");
+  const [tableId, setTableId] = useState<string>("");
   const [error, setError] = useState("");
-  const [startingItems, setStartingItems] = useState<{ item_name: string; description: string; weight: number; quantity: number }[]>([]);
+  const [startingItems, setStartingItems] = useState<{ item_name: string; description: string; weight: number; quantity: number; image_url?: string }[]>([]);
   const [startingItemName, setStartingItemName] = useState("");
   const [startingItemDesc, setStartingItemDesc] = useState("");
   const [startingItemWeight, setStartingItemWeight] = useState("1.0");
   const [startingItemQty, setStartingItemQty] = useState("1");
+  const [startingItemImageUrl, setStartingItemImageUrl] = useState("");
   const [attrs, setAttrs] = useState<Attributes>({
     str: 5, agi: 5, int: 5, vit: 5, sur: 5, mag: 5,
   });
 
-  // Auto-select first table once tables are loaded if none is selected
+  // Auto-select table once tables are loaded
   useEffect(() => {
+    if (tables.length === 0) return;
     const params = new URLSearchParams(window.location.search);
     const queryTableId = params.get("tableId");
-    if (queryTableId) {
-      setTableId(queryTableId);
-    } else if (!tableId && tables.length > 0) {
-      setTableId(String(tables[0].id));
+
+    if (queryTableId && tables.some((t) => Number(t.id) === Number(queryTableId))) {
+      setTableId(String(queryTableId));
+      return;
     }
-  }, [tables, tableId]);
+
+    setTableId((prevTableId) => {
+      if (prevTableId && tables.some((t) => String(t.id) === prevTableId)) {
+        return prevTableId;
+      }
+      const availableTable = tables.find((t) => {
+        if (user && Number(t.game_master_id) === Number(user.id)) return true;
+        const myCharsForTable = characters.filter(
+          (c) => Number(c.table_id) === Number(t.id) && c.alive === 1 && Number(c.user_id) === Number(user?.id)
+        );
+        return myCharsForTable.length === 0;
+      });
+      return String(availableTable ? availableTable.id : tables[0].id);
+    });
+  }, [tables, characters, user]);
 
   const total = useMemo(
     () => ATTR_ORDER.reduce((s, k) => s + (attrs[k] || 0), 0),
@@ -92,12 +110,14 @@ function ForgePage() {
         description: startingItemDesc.trim(),
         weight: w,
         quantity: q,
+        image_url: startingItemImageUrl.trim(),
       },
     ]);
     setStartingItemName("");
     setStartingItemDesc("");
     setStartingItemWeight("1.0");
     setStartingItemQty("1");
+    setStartingItemImageUrl("");
   };
 
   const handleRemoveStartingItem = (index: number) => {
@@ -107,6 +127,14 @@ function ForgePage() {
   const valid = total === TOTAL_POINTS && name.trim().length > 0 && tableId !== "";
 
   const submit = async () => {
+    if (!name.trim()) {
+      setError("Nome é obrigatório.");
+      return;
+    }
+    if (!tableId) {
+      setError("Selecione uma mesa para vincular seu herói.");
+      return;
+    }
     if (!valid) return;
     setError("");
     const res = await addCharacter({
@@ -130,6 +158,7 @@ function ForgePage() {
       alive: 1,
       hp: attrs.vit * 10,
       max_hp: attrs.vit * 10,
+      image_url: imageUrl.trim(),
       starting_items: startingItems
     });
     if (res.success) {
@@ -211,6 +240,14 @@ function ForgePage() {
                     </SelectContent>
                   </Select>
                 </Field>
+                <div className="sm:col-span-2">
+                  <ImageInput
+                    label="Imagem / Avatar do Herói (Arquivo do Computador ou URL)"
+                    value={imageUrl}
+                    onChange={setImageUrl}
+                    placeholder="https://exemplo.com/avatar.jpg"
+                  />
+                </div>
                 <Field label="Cor / Descrição">
                   <Input value={color} onChange={(e) => setColor(e.target.value)} placeholder="Cabelos, olhos…" />
                 </Field>
@@ -248,6 +285,14 @@ function ForgePage() {
                       value={startingItemDesc}
                       onChange={(e) => setStartingItemDesc(e.target.value)}
                       className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <ImageInput
+                      label="Imagem do Item (Arquivo do Computador ou URL)"
+                      value={startingItemImageUrl}
+                      onChange={setStartingItemImageUrl}
+                      placeholder="https://exemplo.com/item.jpg"
                     />
                   </div>
                   <div>
@@ -288,7 +333,10 @@ function ForgePage() {
                     <p className="text-xs text-muted-foreground italic text-center py-2">Sem itens adicionados.</p>
                   ) : (
                     startingItems.map((it, idx) => (
-                      <div key={idx} className="flex justify-between items-center text-xs p-2 rounded bg-secondary/50 border border-border">
+                      <div key={idx} className="flex justify-between items-center text-xs p-2 rounded bg-secondary/50 border border-border gap-2">
+                        {it.image_url && (
+                          <img src={resolveImageUrl(it.image_url)} alt={it.item_name} className="w-8 h-8 rounded object-cover border border-border shrink-0" />
+                        )}
                         <div className="min-w-0 flex-1">
                           <div className="font-semibold truncate">{it.item_name}</div>
                           {it.description && <div className="text-[10px] text-muted-foreground truncate">{it.description}</div>}
@@ -299,7 +347,7 @@ function ForgePage() {
                         <button
                           type="button"
                           onClick={() => handleRemoveStartingItem(idx)}
-                          className="text-[10px] text-destructive hover:underline ml-2"
+                          className="text-[10px] text-destructive hover:underline ml-2 shrink-0"
                         >
                           Remover
                         </button>

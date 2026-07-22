@@ -27,6 +27,8 @@ export type Character = {
   hp: number;
   max_hp: number;
   owner_username?: string; // Loaded in table characters list
+  image_url?: string;
+  unallocated_points?: number;
 };
 
 export type Table = {
@@ -41,6 +43,7 @@ export type InventoryItem = {
   description: string;
   weight: number;
   quantity: number;
+  image_url?: string;
 };
 
 export type Session = {
@@ -58,6 +61,8 @@ export type SessionLog = {
   username: string;
   event_text: string;
   created_at: string;
+  event_type?: string;
+  item_data?: string;
 };
 
 export type TableItem = {
@@ -66,6 +71,7 @@ export type TableItem = {
   item_name: string;
   description: string;
   weight: number;
+  image_url?: string;
 };
 
 type Ctx = {
@@ -86,12 +92,13 @@ type Ctx = {
   fetchSessions: (tableId: number) => Promise<void>;
   addSession: (tableId: number, name: string, description?: string) => Promise<boolean>;
   fetchSessionLogs: (sessionId: number) => Promise<void>;
-  addSessionLog: (sessionId: number, eventText: string) => Promise<boolean>;
+  addSessionLog: (sessionId: number, eventText: string, eventType?: string, itemData?: string) => Promise<boolean>;
   fetchTableItems: (tableId: number) => Promise<void>;
-  createTableItem: (tableId: number, name: string, description: string, weight: number) => Promise<boolean>;
-  assignTableItem: (tableId: number, itemId: number, characterId: number, quantity: number) => Promise<boolean>;
+  createTableItem: (tableId: number, name: string, description: string, weight: number, imageUrl?: string) => Promise<{ success: boolean; error?: string }>;
+  assignTableItem: (tableId: number, itemId: number, characterId: number, quantity: number) => Promise<{ success: boolean; error?: string }>;
   deleteTableItem: (itemId: number, tableId: number) => Promise<boolean>;
   deleteSessionLog: (sessionId: number, logId: number) => Promise<boolean>;
+  allocateStat: (charId: number, attribute: string) => Promise<boolean>;
   addCharacter: (data: {
     table_id: number;
     name: string;
@@ -110,17 +117,19 @@ type Ctx = {
     vit: number;
     sur: number;
     mag: number;
+    image_url?: string;
     starting_items?: {
       item_name: string;
       description: string;
       weight: number;
       quantity: number;
+      image_url?: string;
     }[];
   }) => Promise<{ success: boolean; error?: string }>;
   deleteCharacter: (id: number) => Promise<void>;
-  updateCharacter: (id: number, patch: { lore?: string; level?: number; hp?: number; max_hp?: number; alive?: number }) => Promise<void>;
-  addTable: (name: string) => Promise<boolean>;
-  addInventoryItem: (charId: number, item_name: string, description: string, weight: number, quantity: number) => Promise<void>;
+  updateCharacter: (id: number, patch: { lore?: string; level?: number; hp?: number; max_hp?: number; alive?: number; image_url?: string; unallocated_points?: number }) => Promise<void>;
+  addTable: (name: string) => Promise<{ success: boolean; table?: Table; error?: string }>;
+  addInventoryItem: (charId: number, item_name: string, description: string, weight: number, quantity: number, imageUrl?: string) => Promise<{ success: boolean; error?: string }>;
   deleteInventoryItem: (charId: number, itemId: number) => Promise<void>;
   friends: { id: number; username: string }[];
   pendingRequests: { id: number; sender_id: number; username: string }[];
@@ -140,7 +149,56 @@ type Ctx = {
 
 const CharacterContext = createContext<Ctx | null>(null);
 
-export const API_BASE = "http://localhost:8000/api";
+const getApiBaseUrl = () => {
+  if (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  if (typeof window !== "undefined" && window.location) {
+    const hostname = window.location.hostname || "localhost";
+    return `http://${hostname}:8000/api`;
+  }
+  return "http://localhost:8000/api";
+};
+
+export const API_BASE = getApiBaseUrl();
+
+export function resolveImageUrl(url?: string): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
+    return url;
+  }
+  if (url.startsWith("/")) {
+    const origin = API_BASE.replace(/\/api\/?$/, "");
+    return `${origin}${url}`;
+  }
+  return url;
+}
+
+export async function uploadImageFile(file: File): Promise<string> {
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${API_BASE}/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return resolveImageUrl(data.url);
+    }
+  } catch (err) {
+    console.error("Erro ao enviar imagem pro servidor:", err);
+  }
+
+  // Fallback to Base64 Data URL
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      resolve(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 export function CharacterProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<{ id: number; username: string } | null>(null);
@@ -500,7 +558,7 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const addSessionLog = useCallback(async (sessionId: number, eventText: string) => {
+  const addSessionLog = useCallback(async (sessionId: number, eventText: string, eventType: string = "normal", itemData?: string) => {
     if (!user) return false;
     try {
       const res = await fetch(`${API_BASE}/sessions/${sessionId}/logs`, {
@@ -509,7 +567,7 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
           "Content-Type": "application/json",
           "X-User-Id": String(user.id),
         },
-        body: JSON.stringify({ event_text: eventText }),
+        body: JSON.stringify({ event_text: eventText, event_type: eventType, item_data: itemData }),
       });
       if (res.ok) {
         await fetchSessionLogs(sessionId);
@@ -536,8 +594,8 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  const createTableItem = useCallback(async (tableId: number, name: string, description: string, weight: number) => {
-    if (!user) return false;
+  const createTableItem = useCallback(async (tableId: number, name: string, description: string, weight: number, imageUrl: string = "") => {
+    if (!user) return { success: false, error: "Usuário não autenticado." };
     try {
       const res = await fetch(`${API_BASE}/tables/${tableId}/items`, {
         method: "POST",
@@ -545,20 +603,22 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
           "Content-Type": "application/json",
           "X-User-Id": String(user.id),
         },
-        body: JSON.stringify({ item_name: name, description, weight }),
+        body: JSON.stringify({ item_name: name, description, weight, image_url: imageUrl }),
       });
+      const data = await res.json();
       if (res.ok) {
         await fetchTableItems(tableId);
-        return true;
+        return { success: true };
       }
+      return { success: false, error: data.detail || "Erro ao criar item." };
     } catch (err) {
       console.error("Erro ao criar item na mesa:", err);
     }
-    return false;
+    return { success: false, error: "Erro de conexão." };
   }, [user, fetchTableItems]);
 
   const assignTableItem = useCallback(async (tableId: number, itemId: number, characterId: number, quantity: number) => {
-    if (!user) return false;
+    if (!user) return { success: false, error: "Usuário não autenticado." };
     try {
       const res = await fetch(`${API_BASE}/tables/${tableId}/items/${itemId}/assign`, {
         method: "POST",
@@ -568,15 +628,17 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({ character_id: characterId, quantity }),
       });
+      const data = await res.json();
       if (res.ok) {
         // Refresh character inventory
         await fetchInventory(characterId);
-        return true;
+        return { success: true };
       }
+      return { success: false, error: data.detail || "Erro ao atribuir item." };
     } catch (err) {
       console.error("Erro ao atribuir item ao personagem:", err);
     }
-    return false;
+    return { success: false, error: "Erro de conexão." };
   }, [user, fetchInventory]);
 
   const deleteTableItem = useCallback(async (itemId: number, tableId: number) => {
@@ -608,6 +670,63 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
     }
     return false;
   }, [fetchSessionLogs]);
+
+  const allocateStat = useCallback(async (charId: number, attribute: string) => {
+    // 1. Optimistic local state updates for 0ms delay
+    setCharacters((prev) =>
+      prev.map((c) => {
+        if (c.id === charId && (c.unallocated_points ?? 0) > 0) {
+          const currentVal = c.attributes?.[attribute] ?? 5;
+          return {
+            ...c,
+            unallocated_points: (c.unallocated_points ?? 0) - 1,
+            attributes: {
+              ...c.attributes,
+              [attribute]: currentVal + 1,
+            },
+          };
+        }
+        return c;
+      })
+    );
+
+    setTableCharacters((prev) => {
+      const next: Record<number, Character[]> = {};
+      for (const tId in prev) {
+        next[tId] = prev[tId].map((c) => {
+          if (c.id === charId && (c.unallocated_points ?? 0) > 0) {
+            const currentVal = c.attributes?.[attribute] ?? 5;
+            return {
+              ...c,
+              unallocated_points: (c.unallocated_points ?? 0) - 1,
+              attributes: {
+                ...c.attributes,
+                [attribute]: currentVal + 1,
+              },
+            };
+          }
+          return c;
+        });
+      }
+      return next;
+    });
+
+    try {
+      const res = await fetch(`${API_BASE}/characters/${charId}/allocate-stat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ attribute }),
+      });
+      if (res.ok) {
+        fetchData();
+        return true;
+      }
+    } catch (err) {
+      console.error("Erro ao alocar ponto de atributo:", err);
+    }
+    fetchData();
+    return false;
+  }, [fetchData]);
 
   const addCharacter = useCallback(async (data: any) => {
     if (!user) return { success: false, error: "Usuário não autenticado." };
@@ -646,7 +765,7 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const updateCharacter = useCallback(async (id: number, patch: { lore?: string; level?: number; hp?: number; max_hp?: number; alive?: number }) => {
+  const updateCharacter = useCallback(async (id: number, patch: { lore?: string; level?: number; hp?: number; max_hp?: number; alive?: number; image_url?: string; unallocated_points?: number }) => {
     try {
       const res = await fetch(`${API_BASE}/characters/${id}`, {
         method: "PUT",
@@ -674,7 +793,7 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addTable = useCallback(async (name: string) => {
-    if (!user) return false;
+    if (!user) return { success: false, error: "Usuário não autenticado." };
     try {
       const res = await fetch(`${API_BASE}/tables`, {
         method: "POST",
@@ -684,31 +803,37 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({ name }),
       });
+      const data = await res.json();
       if (res.ok) {
         await fetchData();
-        return true;
+        return { success: true, table: data };
       }
+      return { success: false, error: data.detail || "Erro ao criar mesa." };
     } catch (err) {
       console.error("Erro ao criar mesa:", err);
     }
-    return false;
+    return { success: false, error: "Erro de conexão." };
   }, [user, fetchData]);
 
-  const addInventoryItem = useCallback(async (charId: number, item_name: string, description: string, weight: number, quantity: number) => {
+  const addInventoryItem = useCallback(async (charId: number, item_name: string, description: string, weight: number, quantity: number, imageUrl: string = "") => {
     try {
       const res = await fetch(`${API_BASE}/characters/${charId}/inventory`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ item_name, description, weight, quantity }),
+        body: JSON.stringify({ item_name, description, weight, quantity, image_url: imageUrl }),
       });
+      const data = await res.json();
       if (res.ok) {
         await fetchInventory(charId);
+        return { success: true };
       }
+      return { success: false, error: data.detail || "Erro ao adicionar item." };
     } catch (err) {
       console.error("Erro ao adicionar item:", err);
     }
+    return { success: false, error: "Erro de conexão." };
   }, [fetchInventory]);
 
   const deleteInventoryItem = useCallback(async (charId: number, itemId: number) => {
@@ -750,6 +875,7 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
         assignTableItem,
         deleteTableItem,
         deleteSessionLog,
+        allocateStat,
         addCharacter,
         deleteCharacter,
         updateCharacter,

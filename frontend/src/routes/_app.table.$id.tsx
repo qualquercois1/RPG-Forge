@@ -1,7 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { ArrowLeft, Scroll, Plus, Dices, Send, Skull, Shield, Heart, RefreshCw, Backpack, Trash2, Users, User } from "lucide-react";
-import { useCharacters } from "@/context/character-context";
+import { useEffect, useState, useRef } from "react";
+import { ArrowLeft, ArrowDown, Scroll, Plus, Dices, Send, Skull, Shield, Heart, RefreshCw, Backpack, Trash2, Users, User, Share2, Sparkles } from "lucide-react";
+import { useCharacters, type Character, resolveImageUrl } from "@/context/character-context";
+import { ImageInput } from "@/components/ui/image-input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -48,6 +49,8 @@ function TableDetailPage() {
     assignTableItem,
     deleteTableItem,
     deleteSessionLog,
+    allocateStat,
+    addInventoryItem,
     fetchInventory,
     updateCharacter,
     deleteInventoryItem,
@@ -55,10 +58,13 @@ function TableDetailPage() {
     inviteToTable,
     fetchTableInvitationsList,
     friends,
+    fetchData,
   } = useCharacters();
 
-  const currentTable = tables.find((t) => t.id === tableId);
-  const characters = tableCharacters[tableId] ?? [];
+  const currentTable = tables.find((t) => Number(t.id) === Number(tableId));
+  const rawCharacters = tableCharacters[tableId] ?? [];
+  // Sort characters: alive characters first, dead characters (alive === 0) at the bottom (Item 12)
+  const characters = [...rawCharacters].sort((a, b) => b.alive - a.alive);
   const sessions = sessionsByTable[tableId] ?? [];
   const tableItems = tableItemsByTable[tableId] ?? [];
 
@@ -66,14 +72,18 @@ function TableDetailPage() {
   const [newSessionName, setNewSessionName] = useState("");
   const [newLogText, setNewLogText] = useState("");
   const [diceModifier, setDiceModifier] = useState("0");
+  const [customDiceFaces, setCustomDiceFaces] = useState("20");
   const [creatingSession, setCreatingSession] = useState(false);
 
   // States for Table Items (GM only)
   const [newItemName, setNewItemName] = useState("");
   const [newItemDesc, setNewItemDesc] = useState("");
   const [newItemWeight, setNewItemWeight] = useState("1.0");
+  const [newItemImageUrl, setNewItemImageUrl] = useState("");
   const [assignCharId, setAssignCharId] = useState<Record<number, string>>({});
   const [assignQty, setAssignQty] = useState<Record<number, string>>({});
+
+  const [chatAssignCharId, setChatAssignCharId] = useState<Record<number, string>>({});
 
   const [selectedCharacterId, setSelectedCharacterId] = useState<number | null>(() => {
     const saved = localStorage.getItem(`table_char_${tableId}`);
@@ -85,16 +95,52 @@ function TableDetailPage() {
   const [inviteSuccess, setInviteSuccess] = useState("");
   const [guests, setGuests] = useState<{ id: number; username: string; status: string }[]>([]);
 
-  // Character Modal View state
+  // Character & Item Modal View states
   const [selectedCharForModal, setSelectedCharForModal] = useState<any | null>(null);
+  const [selectedItemForModal, setSelectedItemForModal] = useState<any | null>(null);
+  const [zoomedImage, setZoomedImage] = useState<{ url: string; title?: string } | null>(null);
   const [modalHpChange, setModalHpChange] = useState("5");
+  const [isSelectingCharacter, setIsSelectingCharacter] = useState(false);
+
+  const [userScrolledUp, setUserScrolledUp] = useState(false);
+
+  const chatContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const handleChatScroll = () => {
+    if (!chatContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 40;
+    if (isAtBottom) {
+      setUserScrolledUp(false);
+    } else {
+      setUserScrolledUp(true);
+    }
+  };
+
+  const scrollToBottom = () => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+      setUserScrolledUp(false);
+    }
+  };
 
   // Load basic table info on mount
   useEffect(() => {
+    fetchData();
     fetchTableCharacters(tableId);
     fetchSessions(tableId);
     fetchTableItems(tableId);
-  }, [tableId, fetchTableCharacters, fetchSessions, fetchTableItems]);
+  }, [tableId, fetchData, fetchTableCharacters, fetchSessions, fetchTableItems]);
+
+  // Load inventory of the active selected character
+  useEffect(() => {
+    if (selectedCharacterId) {
+      fetchInventory(selectedCharacterId);
+    }
+  }, [selectedCharacterId, fetchInventory]);
 
   // Load inventory of the selected character in modal
   useEffect(() => {
@@ -117,8 +163,32 @@ function TableDetailPage() {
     }
   }, [activeSessionId, fetchSessionLogs]);
 
-  const isGM = currentTable?.game_master_id === user?.id;
-  const myChars = characters.filter((c) => c.user_id === user?.id);
+  // Polling for live chat logs, character updates & inventory every 3 seconds (Item 1)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (activeSessionId !== null) {
+        fetchSessionLogs(activeSessionId);
+      }
+      fetchTableCharacters(tableId);
+      if (selectedCharacterId) {
+        fetchInventory(selectedCharacterId);
+      }
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [activeSessionId, tableId, selectedCharacterId, fetchSessionLogs, fetchTableCharacters, fetchInventory]);
+
+  const activeSession = sessions.find((s) => s.id === activeSessionId);
+  const logs = activeSessionId !== null ? (logsBySession[activeSessionId] ?? []) : [];
+
+  // Auto-scroll ONLY if user has NOT manually scrolled up
+  useEffect(() => {
+    if (chatContainerRef.current && !userScrolledUp) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [logs, userScrolledUp]);
+
+  const isGM = Boolean(currentTable && user && Number(currentTable.game_master_id) === Number(user.id));
+  const myChars = characters.filter((c) => Number(c.user_id) === Number(user?.id));
 
   // Load guests for GM
   const loadGuests = async () => {
@@ -134,24 +204,29 @@ function TableDetailPage() {
 
   // Handle auto-redirection to forge if user is not GM and has no character for this table
   useEffect(() => {
-    if (currentTable && user && currentTable.game_master_id !== user.id && tableCharacters[tableId] !== undefined) {
-      const myCharsForTable = (tableCharacters[tableId] || []).filter((c) => c.user_id === user.id);
+    if (currentTable && user && Number(currentTable.game_master_id) !== Number(user.id) && tableCharacters[tableId] !== undefined) {
+      const myCharsForTable = (tableCharacters[tableId] || []).filter((c) => Number(c.user_id) === Number(user.id));
       if (myCharsForTable.length === 0) {
         navigate({ to: "/forge", search: { tableId: String(tableId) } as any });
       }
     }
   }, [currentTable, user, tableCharacters, tableId, navigate]);
 
-  // Reset selectedCharacterId if it no longer exists
+  // Reset or auto-select selectedCharacterId for user (GM or Player)
   useEffect(() => {
+    if (isSelectingCharacter) return;
+
     if (selectedCharacterId !== null && myChars.length > 0) {
       const stillExists = myChars.some((c) => c.id === selectedCharacterId);
       if (!stillExists) {
-        setSelectedCharacterId(null);
-        localStorage.removeItem(`table_char_${tableId}`);
+        setSelectedCharacterId(myChars[0].id);
+        localStorage.setItem(`table_char_${tableId}`, String(myChars[0].id));
       }
+    } else if (selectedCharacterId === null && myChars.length > 0) {
+      setSelectedCharacterId(myChars[0].id);
+      localStorage.setItem(`table_char_${tableId}`, String(myChars[0].id));
     }
-  }, [myChars, selectedCharacterId, tableId]);
+  }, [myChars, selectedCharacterId, tableId, isSelectingCharacter]);
 
   const handleSendTableInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,9 +247,6 @@ function TableDetailPage() {
     }
   };
 
-  const activeSession = sessions.find((s) => s.id === activeSessionId);
-  const logs = activeSessionId !== null ? (logsBySession[activeSessionId] ?? []) : [];
-
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSessionName.trim()) return;
@@ -188,35 +260,102 @@ function TableDetailPage() {
   const handleSendLog = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLogText.trim() || activeSessionId === null) return;
-    const success = await addSessionLog(activeSessionId, newLogText.trim());
+    const success = await addSessionLog(activeSessionId, newLogText.trim(), "normal");
     if (success) {
       setNewLogText("");
     }
   };
 
+  // Roll Dice with customizable faces (Item 7 & 3)
   const handleRollDice = async (faces: number) => {
     if (activeSessionId === null || !user) return;
     const roll = Math.floor(Math.random() * faces) + 1;
     const mod = parseInt(diceModifier) || 0;
     const total = roll + mod;
     
-    let rollMessage = `rolou D${faces} e obteve ${roll}`;
+    let rollMessage = `🎲 [DADO] rolou D${faces} e obteve ${roll}`;
     if (mod > 0) rollMessage += ` (+${mod} Mod = ${total})`;
     else if (mod < 0) rollMessage += ` (${mod} Mod = ${total})`;
     else rollMessage += ` (Total = ${total})`;
 
-    await addSessionLog(activeSessionId, rollMessage);
+    await addSessionLog(activeSessionId, rollMessage, "dice");
   };
 
+  // HP Change with color-coded chat logs (Item 3 & 11)
+  const handleCharacterHpChange = async (char: Character, delta: number) => {
+    const val = Math.abs(delta);
+    if (val <= 0) return;
+    const sign = delta > 0 ? 1 : -1;
+    const nextHp = Math.max(0, Math.min(char.max_hp, char.hp + sign * val));
+    
+    await updateCharacter(char.id, { hp: nextHp });
+
+    if (activeSessionId !== null) {
+      if (sign < 0) {
+        await addSessionLog(
+          activeSessionId,
+          `💥 [DANO] ${char.name} tomou ${val} de dano! (${nextHp}/${char.max_hp} HP)`,
+          "damage"
+        );
+      } else {
+        await addSessionLog(
+          activeSessionId,
+          `✨ [CURA] ${char.name} curou ${val} de vida! (${nextHp}/${char.max_hp} HP)`,
+          "heal"
+        );
+      }
+    }
+  };
+
+  // Level change with chat logs (Item 3 & 5)
+  const handleCharacterLevelChange = async (char: Character, diff: number) => {
+    const nextLevel = Math.max(1, char.level + diff);
+    await updateCharacter(char.id, { level: nextLevel });
+    if (activeSessionId !== null && diff > 0) {
+      await addSessionLog(
+        activeSessionId,
+        `⭐ [NÍVEL] ${char.name} subiu para o Nível ${nextLevel}!`,
+        "level"
+      );
+    }
+  };
+
+  // GM Death / Stabilization Controls (Item 11)
+  const handleKillCharacter = async (char: Character) => {
+    await updateCharacter(char.id, { alive: 0 });
+    if (activeSessionId !== null) {
+      await addSessionLog(
+        activeSessionId,
+        `☠️ [MORTE] ${char.name} sucumbiu aos ferimentos e MORREU!`,
+        "damage"
+      );
+    }
+  };
+
+  const handleStabilizeCharacter = async (char: Character) => {
+    await updateCharacter(char.id, { hp: 1, alive: 1 });
+    if (activeSessionId !== null) {
+      await addSessionLog(
+        activeSessionId,
+        `💖 [ESTABILIZADO] ${char.name} foi estabilizado e voltou à vida com 1 HP!`,
+        "heal"
+      );
+    }
+  };
+
+  // Item Creation with Image (Item 8)
   const handleCreateItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItemName.trim()) return;
     const w = parseFloat(newItemWeight) || 0.0;
-    const success = await createTableItem(tableId, newItemName.trim(), newItemDesc.trim(), w);
-    if (success) {
+    const res = await createTableItem(tableId, newItemName.trim(), newItemDesc.trim(), w, newItemImageUrl.trim());
+    if (res.success) {
       setNewItemName("");
       setNewItemDesc("");
       setNewItemWeight("1.0");
+      setNewItemImageUrl("");
+    } else {
+      alert(res.error || "Erro ao criar item.");
     }
   };
 
@@ -226,22 +365,60 @@ function TableDetailPage() {
     const charId = parseInt(charIdStr, 10);
     const qty = parseInt(assignQty[itemId] || "1", 10) || 1;
 
-    const success = await assignTableItem(tableId, itemId, charId, qty);
-    if (success) {
-      // Find character name
+    const res = await assignTableItem(tableId, itemId, charId, qty);
+    if (res.success) {
+      await fetchInventory(charId);
       const targetChar = characters.find((c) => c.id === charId);
       const targetItem = tableItems.find((i) => i.id === itemId);
       if (targetChar && targetItem && activeSessionId) {
-        // Record assignment in logs
         await addSessionLog(
           activeSessionId, 
-          `atribuiu o item "${targetItem.item_name}" (x${qty}) ao inventário de ${targetChar.name}.`
+          `🎁 [ITEM ATRIBUÍDO] O item "${targetItem.item_name}" (x${qty}) foi atribuído a ${targetChar.name}!`,
+          "item"
         );
       }
-      
-      // Clear assignment selection
       setAssignCharId((prev) => ({ ...prev, [itemId]: "" }));
       setAssignQty((prev) => ({ ...prev, [itemId]: "1" }));
+    } else {
+      alert(res.error || "Não foi possível atribuir o item.");
+    }
+  };
+
+  // Share Item to Chat (Item 10)
+  const handleShareItemToChat = async (item: { item_name: string; description: string; weight: number; image_url?: string }) => {
+    if (activeSessionId === null) return;
+    const itemData = JSON.stringify(item);
+    await addSessionLog(
+      activeSessionId,
+      `📦 [ITEM DA MESA] compartilhou o item "${item.item_name}" com a mesa!`,
+      "item",
+      itemData
+    );
+  };
+
+  // GM Assign item shared in chat to a character (Item 10)
+  const handleAssignChatItem = async (logId: number, itemDataRaw: string) => {
+    const charIdStr = chatAssignCharId[logId];
+    if (!charIdStr) return;
+    const charId = parseInt(charIdStr, 10);
+    try {
+      const itemData = JSON.parse(itemDataRaw);
+      const res = await addInventoryItem(charId, itemData.item_name, itemData.description || "", itemData.weight || 0, 1, itemData.image_url || "");
+      if (res.success) {
+        const targetChar = characters.find(c => c.id === charId);
+        if (targetChar && activeSessionId !== null) {
+          await addSessionLog(
+            activeSessionId,
+            `🎁 [ITEM ATRIBUÍDO] O item "${itemData.item_name}" foi atribuído a ${targetChar.name}!`,
+            "item"
+          );
+        }
+        setChatAssignCharId(prev => ({ ...prev, [logId]: "" }));
+      } else {
+        alert(res.error || "Não foi possível atribuir o item.");
+      }
+    } catch (e) {
+      console.error("Erro ao atribuir item do chat:", e);
     }
   };
 
@@ -282,12 +459,21 @@ function TableDetailPage() {
                 }}
                 className="w-full p-4 rounded-lg border border-border bg-secondary/20 hover:border-primary/50 hover:bg-primary/5 transition-all text-left flex items-center justify-between group cursor-pointer"
               >
-                <div>
-                  <div className="font-display text-xl font-bold group-hover:text-primary transition-colors">
-                    {char.name}
-                  </div>
-                  <div className="text-xs text-muted-foreground font-mono mt-0.5">
-                    {char.classe} • Nível {char.level}
+                <div className="flex items-center gap-3">
+                  {char.image_url ? (
+                    <img src={resolveImageUrl(char.image_url)} alt={char.name} className="w-10 h-10 rounded-lg object-cover border border-primary/30 shrink-0" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center font-display text-lg font-bold text-primary shrink-0">
+                      {char.name[0]}
+                    </div>
+                  )}
+                  <div>
+                    <div className="font-display text-xl font-bold group-hover:text-primary transition-colors">
+                      {char.name}
+                    </div>
+                    <div className="text-xs text-muted-foreground font-mono mt-0.5">
+                      {char.classe} • Nível {char.level}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -317,7 +503,7 @@ function TableDetailPage() {
     <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-6">
       <button
         onClick={() => navigate({ to: "/tables" })}
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4"
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4 bg-transparent border-0 cursor-pointer"
       >
         <ArrowLeft className="h-4 w-4" /> Voltar para Mesas
       </button>
@@ -378,8 +564,8 @@ function TableDetailPage() {
         {/* Left Column: Characters List & GM Items Chest */}
         <div className="space-y-6">
           
-          {/* Active Character for current user */}
-          {!isGM && selectedCharacterId !== null && (
+          {/* Active Character for current user (GM or Player) */}
+          {selectedCharacterId !== null && (
             <Card className="p-4 border-primary bg-primary/5 neon-border space-y-3 relative overflow-hidden">
               <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
               <div className="flex justify-between items-center">
@@ -403,13 +589,22 @@ function TableDetailPage() {
                 if (!char) return null;
                 return (
                   <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h4 className="font-display text-lg font-bold text-foreground leading-tight">
-                        {char.name}
-                      </h4>
-                      <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                        {char.classe} • Nível {char.level}
-                      </p>
+                    <div className="flex items-center gap-3">
+                      {char.image_url ? (
+                        <img src={resolveImageUrl(char.image_url)} alt={char.name} className="w-10 h-10 rounded-lg object-cover border border-primary/40 shrink-0" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center font-display text-lg font-bold text-primary shrink-0">
+                          {char.name[0]}
+                        </div>
+                      )}
+                      <div>
+                        <h4 className="font-display text-lg font-bold text-foreground leading-tight">
+                          {char.name}
+                        </h4>
+                        <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                          {char.classe} • Nível {char.level}
+                        </p>
+                      </div>
                     </div>
                     <span className={cn(
                       "text-[9px] uppercase font-bold px-1.5 py-0.5 rounded",
@@ -502,6 +697,7 @@ function TableDetailPage() {
             </Card>
           )}
 
+          {/* Table Characters List (Item 12: Dead characters sorted to bottom) */}
           <div className="space-y-4">
             <h2 className="font-display text-2xl flex items-center gap-2">
               <Shield className="h-5 w-5 text-primary" /> Personagens na Mesa
@@ -519,64 +715,122 @@ function TableDetailPage() {
                     <div
                       key={c.id}
                       className={cn(
-                        "p-4 rounded-lg border border-border bg-card/60 flex items-start gap-4 transition-all",
-                        charDead && "opacity-60 border-destructive/20"
+                        "p-4 rounded-lg border border-border bg-card/60 flex flex-col gap-3 transition-all",
+                        charDead && "opacity-60 border-destructive/20 bg-destructive/5"
                       )}
                     >
-                      <div className={cn(
-                        "grid place-items-center h-12 w-12 rounded-lg border shrink-0 text-sm font-bold uppercase",
-                        charDead ? "bg-destructive/10 text-destructive border-destructive/30" : "bg-primary/10 text-primary border-primary/20"
-                      )}>
-                        {charDead ? "M" : "V"}
-                      </div>
-                      
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <div className="flex justify-between items-start gap-2">
-                          <div>
-                            <h4 className="font-display text-lg font-semibold leading-none truncate">{c.name}</h4>
-                            <span className="text-[10px] text-muted-foreground font-mono">Jogador: {c.owner_username}</span>
-                          </div>
-                          {charDead ? (
-                            <span className="text-[9px] uppercase font-bold text-destructive px-1.5 py-0.5 rounded bg-destructive/10 border border-destructive/20 flex items-center gap-0.5">
-                              <Skull className="h-2.5 w-2.5" /> Morto
-                            </span>
+                      <div className="flex items-start gap-3">
+                        <div className={cn(
+                          "grid place-items-center h-12 w-12 rounded-lg border shrink-0 overflow-hidden",
+                          charDead ? "bg-destructive/10 text-destructive border-destructive/30" : "bg-primary/10 text-primary border-primary/20"
+                        )}>
+                          {c.image_url ? (
+                            <img src={resolveImageUrl(c.image_url)} alt={c.name} className="w-full h-full object-cover" />
+                          ) : charDead ? (
+                            <Skull className="h-6 w-6" />
                           ) : (
-                            <span className="text-[9px] uppercase font-bold text-primary px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20">
-                              Nível {c.level}
-                            </span>
+                            <span className="font-display text-lg font-bold">{c.name[0]}</span>
                           )}
                         </div>
-
-                        <div className="space-y-0.5 pt-1">
-                          <div className="flex justify-between text-[10px] font-mono text-muted-foreground">
-                            <span>Vida</span>
-                            <span className={cn(charDead ? "text-destructive font-bold" : "text-primary")}>
-                              {c.hp} / {c.max_hp} HP
-                            </span>
+                        
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex justify-between items-start gap-2">
+                            <div>
+                              <h4 className="font-display text-lg font-semibold leading-none truncate">{c.name}</h4>
+                              <span className="text-[10px] text-muted-foreground font-mono">Jogador: {c.owner_username}</span>
+                            </div>
+                            {charDead ? (
+                              <span className="text-[9px] uppercase font-bold text-destructive px-1.5 py-0.5 rounded bg-destructive/10 border border-destructive/20 flex items-center gap-0.5">
+                                <Skull className="h-2.5 w-2.5" /> Morto
+                              </span>
+                            ) : (
+                              <span className="text-[9px] uppercase font-bold text-primary px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20">
+                                Nível {c.level}
+                              </span>
+                            )}
                           </div>
-                          <Progress 
-                            value={(c.hp / c.max_hp) * 100} 
-                            className={cn("h-1", charDead && "[&>*]:bg-destructive")} 
-                          />
-                        </div>
 
-                        <div className="pt-2 flex justify-between items-center gap-2">
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={() => {
-                              setSelectedCharForModal(c);
-                              setModalHpChange("5");
-                            }}
-                            className="h-6 px-2.5 text-[10px] font-semibold"
-                          >
-                            Ver Ficha (Modal)
-                          </Button>
-                          <Button asChild size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground">
-                            <Link to="/character/$id" params={{ id: String(c.id) }}>
-                              Ficha Detalhada
-                            </Link>
-                          </Button>
+                          <div className="space-y-0.5 pt-1">
+                            <div className="flex justify-between text-[10px] font-mono text-muted-foreground">
+                              <span>Vida</span>
+                              <span className={cn(charDead ? "text-destructive font-bold" : "text-primary")}>
+                                {c.hp} / {c.max_hp} HP
+                              </span>
+                            </div>
+                            <Progress 
+                              value={Math.max(0, (c.hp / c.max_hp) * 100)} 
+                              className={cn("h-1.5", charDead && "[&>*]:bg-destructive")} 
+                            />
+                          </div>
+
+                          {/* GM Controls: Damage / Heal / Level / Death Confirmation (Item 3 & 11) */}
+                          {isGM && (
+                            <div className="pt-2 space-y-2">
+                              <div className="flex items-center gap-1.5">
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleCharacterHpChange(c, -5)}
+                                  className="h-6 px-2 text-[10px] font-semibold flex-1"
+                                >
+                                  -5 Dano
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleCharacterHpChange(c, 5)}
+                                  className="h-6 px-2 text-[10px] font-semibold flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                >
+                                  +5 Cura
+                                </Button>
+                              </div>
+
+                              {/* GM HP Zero Confirmation Buttons (Item 11) */}
+                              {c.hp === 0 && c.alive === 1 && (
+                                <div className="p-2 rounded bg-destructive/10 border border-destructive/30 space-y-1.5">
+                                  <p className="text-[10px] font-bold text-destructive text-center">
+                                    ⚠️ Vida zerada! O que o Mestre fará?
+                                  </p>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      onClick={() => handleKillCharacter(c)}
+                                      className="h-6 text-[10px] px-2 font-bold flex-1"
+                                    >
+                                      <Skull className="h-3 w-3 mr-1" /> Confirmar Morte (Matar)
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleStabilizeCharacter(c)}
+                                      className="h-6 text-[10px] px-2 font-bold flex-1 text-emerald-400 border-emerald-500/40 hover:bg-emerald-950/30"
+                                    >
+                                      <Heart className="h-3 w-3 mr-1" /> Estabilizar (1 HP)
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="pt-2 flex justify-between items-center gap-2">
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => {
+                                setSelectedCharForModal(c);
+                                setModalHpChange("5");
+                              }}
+                              className="h-6 px-2.5 text-[10px] font-semibold"
+                            >
+                              Ver Ficha (Modal)
+                            </Button>
+                            <Button asChild size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground">
+                              <Link to="/character/$id" params={{ id: String(c.id) }}>
+                                Ficha Detalhada
+                              </Link>
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -586,7 +840,7 @@ function TableDetailPage() {
             </div>
           </div>
 
-          {/* GM Items Chest Panel */}
+          {/* GM Items Chest Panel (GM Only) */}
           {isGM && (
             <div className="space-y-4 border-t border-border pt-6">
               <h2 className="font-display text-2xl flex items-center gap-2">
@@ -594,8 +848,8 @@ function TableDetailPage() {
               </h2>
 
               {/* Create Table Item Form */}
-              <Card className="p-4 bg-card/65 border-border">
-                <h4 className="text-xs uppercase tracking-widest text-primary mb-3">Criar Item da Mesa</h4>
+              <Card className="p-4 bg-card/65 border-border space-y-3">
+                <h4 className="text-xs uppercase tracking-widest text-primary font-semibold">Criar Item da Mesa</h4>
                 <form onSubmit={handleCreateItem} className="space-y-3">
                   <div>
                     <Label htmlFor="itName" className="text-[10px] uppercase tracking-wider text-muted-foreground">Nome do Item</Label>
@@ -618,6 +872,12 @@ function TableDetailPage() {
                       className="h-8 text-xs"
                     />
                   </div>
+                  <ImageInput
+                    label="Imagem do Item (Arquivo do Computador ou URL)"
+                    value={newItemImageUrl}
+                    onChange={setNewItemImageUrl}
+                    placeholder="https://exemplo.com/item.jpg"
+                  />
                   <div>
                     <Label htmlFor="itWeight" className="text-[10px] uppercase tracking-wider text-muted-foreground">Peso Unitário (kg)</Label>
                     <Input
@@ -645,25 +905,51 @@ function TableDetailPage() {
                   </div>
                 ) : (
                   tableItems.map((it) => (
-                    <Card key={it.id} className="p-3 bg-card/40 border-border/80 flex flex-col gap-2">
+                    <Card key={it.id} className="p-3 bg-card/40 border-border/80 flex flex-col gap-2 hover:bg-card/70 transition-all">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <h5 className="font-semibold text-sm text-foreground truncate">{it.item_name}</h5>
-                          {it.description && (
-                            <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">{it.description}</p>
-                          )}
-                          <span className="text-[9px] font-mono bg-secondary px-1.5 py-0.5 rounded text-muted-foreground mt-1 inline-block">
-                            Peso: {it.weight} kg
-                          </span>
-                        </div>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleDeleteItem(it.id)}
-                          className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                        <div
+                          onClick={() => setSelectedItemForModal({ ...it, quantity: (it as any).quantity || 1 })}
+                          className="flex items-center gap-2 min-w-0 cursor-pointer group flex-1"
+                          title="Clique para ver detalhes do item e compartilhar"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                          {it.image_url ? (
+                            <img src={resolveImageUrl(it.image_url)} alt={it.item_name} className="w-10 h-10 rounded object-cover border border-border shrink-0 bg-background" />
+                          ) : (
+                            <div className="w-10 h-10 rounded bg-primary/10 border border-primary/20 grid place-items-center shrink-0">
+                              <Backpack className="h-5 w-5 text-primary" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <h5 className="font-semibold text-sm text-foreground truncate group-hover:text-primary transition-colors">{it.item_name}</h5>
+                            {it.description && (
+                              <p className="text-[11px] text-muted-foreground leading-snug mt-0.5 truncate">{it.description}</p>
+                            )}
+                            <span className="text-[9px] font-mono bg-secondary px-1.5 py-0.5 rounded text-muted-foreground mt-1 inline-block">
+                              Peso: {it.weight} kg
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleShareItemToChat(it)}
+                            className="h-7 w-7 text-muted-foreground hover:text-purple-400 shrink-0"
+                            title="Compartilhar no Chat da Mesa"
+                          >
+                            <Share2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleDeleteItem(it.id)}
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                            title="Excluir Item do Baú"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
 
                       {/* Assignment Row */}
@@ -729,22 +1015,34 @@ function TableDetailPage() {
           {activeSession ? (
             <div className="space-y-4">
               {/* Event Logs Box */}
-              <Card className="p-4 bg-card/45 backdrop-blur flex flex-col h-[450px] border-border">
-                <div className="text-xs text-muted-foreground uppercase tracking-widest border-b border-border pb-2 mb-3">
-                  Registro da {activeSession.name}
+              <Card className="p-4 bg-card/45 backdrop-blur flex flex-col h-[450px] border-border relative">
+                <div className="text-xs text-muted-foreground uppercase tracking-widest border-b border-border pb-2 mb-3 flex justify-between items-center">
+                  <span>Registro da {activeSession.name}</span>
+                  <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping inline-block" /> Ao vivo
+                  </span>
                 </div>
 
-                <div className="flex-1 overflow-y-auto space-y-3 pr-1 text-sm font-mono scrollbar-thin">
+                <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto space-y-3 pr-1 text-sm font-mono scrollbar-thin">
                   {logs.length === 0 ? (
                     <div className="text-center text-muted-foreground/60 py-12">
                       Sessão iniciada. Nenhum acontecimento registrado ainda.
                     </div>
                   ) : (
                     logs.map((log) => {
-                      const isDiceRoll = log.event_text.includes("rolou D");
-                      const isAssignLog = log.event_text.includes("atribuiu o item");
+                      const isDamage = log.event_type === "damage" || log.event_text.includes("[DANO]") || log.event_text.includes("[MORTE]");
+                      const isHeal = log.event_type === "heal" || log.event_text.includes("[CURA]") || log.event_text.includes("[ESTABILIZADO]");
+                      const isLevel = log.event_type === "level" || log.event_text.includes("[NÍVEL]");
+                      const isDice = log.event_type === "dice" || log.event_text.includes("[DADO]");
+                      const isItem = log.event_type === "item" || log.event_text.includes("[ITEM");
+
+                      let parsedItemData: any = null;
+                      if (log.item_data) {
+                        try { parsedItemData = JSON.parse(log.item_data); } catch (e) {}
+                      }
+
                       return (
-                        <div key={log.id} className="group/log space-y-0.5 relative">
+                        <div key={log.id} className="group/log space-y-1 relative">
                           <div className="flex items-baseline justify-between gap-2 text-xs">
                             <div className="flex items-baseline gap-2">
                               <span className={cn(
@@ -758,7 +1056,7 @@ function TableDetailPage() {
                               </span>
                             </div>
                             
-                            {(isGM || ((Number(user?.id) === Number(log.user_id) || user?.username === log.username) && !log.event_text.includes("rolou D") && !log.event_text.includes("atribuiu o item"))) && (
+                            {(isGM || (Number(user?.id) === Number(log.user_id) && !isDice && !isItem)) && (
                               <button
                                 onClick={() => deleteSessionLog(activeSession.id, log.id)}
                                 className="opacity-0 group-hover/log:opacity-100 text-muted-foreground hover:text-destructive text-[10px] font-semibold transition-opacity duration-150 cursor-pointer px-1 py-0.5 rounded hover:bg-destructive/10"
@@ -768,18 +1066,85 @@ function TableDetailPage() {
                               </button>
                             )}
                           </div>
-                          <p className={cn(
-                            "pl-2 border-l border-border/40 leading-relaxed",
-                            isDiceRoll && "text-primary font-semibold italic bg-primary/5 py-0.5 rounded-r",
-                            isAssignLog && "text-amber-500 italic bg-amber-500/5 py-0.5 rounded-r"
-                          )}>
-                            {log.event_text}
-                          </p>
+
+                          {/* Item Card in Chat (Item 10) */}
+                          {isItem && parsedItemData ? (
+                            <div className="bg-purple-950/40 border border-purple-500/40 rounded-lg p-3 space-y-2 text-purple-200 text-xs">
+                              <div className="flex items-center gap-3">
+                                {parsedItemData.image_url ? (
+                                  <img
+                                    src={resolveImageUrl(parsedItemData.image_url)}
+                                    alt={parsedItemData.item_name}
+                                    onClick={() => setZoomedImage({ url: parsedItemData.image_url!, title: parsedItemData.item_name })}
+                                    className="w-12 h-12 rounded object-cover border border-purple-400/40 shrink-0 cursor-pointer hover:scale-105 hover:border-purple-300 transition-all shadow-md"
+                                    title="Clique para abrir a imagem em tamanho maior"
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 rounded bg-purple-900/60 border border-purple-400/40 grid place-items-center shrink-0">
+                                    <Backpack className="h-6 w-6 text-purple-300" />
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <h5 className="font-bold text-sm text-purple-100 truncate">{parsedItemData.item_name}</h5>
+                                  {parsedItemData.description && (
+                                    <p className="text-xs text-purple-300/80 leading-snug">{parsedItemData.description}</p>
+                                  )}
+                                  <div className="text-[10px] font-mono text-purple-400 mt-0.5">
+                                    Peso: {parsedItemData.weight}kg · <span className="font-semibold text-amber-300">Destinatário: Mesa</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {isGM && (
+                                <div className="pt-2 border-t border-purple-500/30 flex items-center gap-2">
+                                  <select
+                                    value={chatAssignCharId[log.id] || ""}
+                                    onChange={(e) => setChatAssignCharId(prev => ({ ...prev, [log.id]: e.target.value }))}
+                                    className="bg-background text-foreground border border-purple-500/40 rounded px-2 py-1 text-xs focus:outline-none flex-1"
+                                  >
+                                    <option value="">Atribuir a personagem...</option>
+                                    {characters.filter(c => c.alive === 1).map(c => (
+                                      <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                  </select>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleAssignChatItem(log.id, log.item_data!)}
+                                    className="h-7 text-xs bg-purple-600 hover:bg-purple-700 text-white font-semibold"
+                                    disabled={!chatAssignCharId[log.id]}
+                                  >
+                                    Atribuir
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <p className={cn(
+                              "pl-2.5 py-1 border-l-2 text-xs leading-relaxed rounded-r font-mono",
+                              isDamage && "text-rose-300 bg-rose-950/40 border-rose-500/80 font-semibold",
+                              isHeal && "text-emerald-300 bg-emerald-950/40 border-emerald-500/80 font-semibold",
+                              isLevel && "text-amber-300 bg-amber-950/40 border-amber-500/80 font-semibold",
+                              isDice && "text-cyan-300 bg-cyan-950/40 border-cyan-500/80 font-semibold",
+                              !isDamage && !isHeal && !isLevel && !isDice && !isItem && "border-border/40 text-foreground/90"
+                            )}>
+                              {log.event_text}
+                            </p>
+                          )}
                         </div>
                       );
                     })
                   )}
                 </div>
+
+                {userScrolledUp && (
+                  <button
+                    type="button"
+                    onClick={scrollToBottom}
+                    className="absolute bottom-16 right-6 bg-primary text-primary-foreground shadow-lg px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 hover:bg-primary/90 transition-all z-20 cursor-pointer animate-bounce border border-primary/30"
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" /> Ir para o final
+                  </button>
+                )}
 
                 {/* Event Input Form */}
                 <form onSubmit={handleSendLog} className="mt-4 flex gap-2 border-t border-border pt-3">
@@ -795,9 +1160,9 @@ function TableDetailPage() {
                 </form>
               </Card>
 
-              {/* Dice Roller Panel */}
-              <Card className="p-4 border-border bg-card/60">
-                <div className="text-xs uppercase tracking-widest text-primary mb-3 flex items-center gap-1.5">
+              {/* Dice Roller Panel (Item 7: Custom Dice Size) */}
+              <Card className="p-4 border-border bg-card/60 space-y-3">
+                <div className="text-xs uppercase tracking-widest text-primary font-semibold flex items-center gap-1.5">
                   <Dices className="h-4 w-4" /> Painel de Rolagem de Dados
                 </div>
 
@@ -813,7 +1178,7 @@ function TableDetailPage() {
                     />
                   </div>
 
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1.5 items-center">
                     {[4, 6, 8, 10, 12, 20, 100].map((faces) => (
                       <Button
                         key={faces}
@@ -826,8 +1191,87 @@ function TableDetailPage() {
                       </Button>
                     ))}
                   </div>
+
+                  {/* Custom Faces Dice Input (Item 7) */}
+                  <div className="flex items-center gap-1.5 pl-2 border-l border-border/40">
+                    <span className="text-xs font-mono text-muted-foreground font-semibold">d</span>
+                    <Input
+                      type="number"
+                      min="2"
+                      max="1000"
+                      value={customDiceFaces}
+                      onChange={(e) => setCustomDiceFaces(e.target.value)}
+                      className="w-14 h-8 text-center text-xs font-mono"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const faces = parseInt(customDiceFaces, 10) || 20;
+                        handleRollDice(faces);
+                      }}
+                      className="h-8 text-xs font-semibold bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30"
+                    >
+                      Rolar Custom
+                    </Button>
+                  </div>
                 </div>
               </Card>
+
+              {/* Character Equipment Quick Compartment (under dice roller layout) */}
+              {selectedCharacterId && (() => {
+                const myActiveChar = characters.find((c) => c.id === selectedCharacterId);
+                const charItems = inventoryByCharacter[selectedCharacterId] ?? [];
+                return (
+                  <Card className="p-4 bg-card/65 border-border space-y-3 mt-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Backpack className="h-4 w-4 text-primary" />
+                        <h4 className="text-xs uppercase tracking-wider font-semibold text-foreground">
+                          Mochila de {myActiveChar?.name || "Herói"} ({charItems.length} itens)
+                        </h4>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground font-mono">Clique no item para detalhes</span>
+                    </div>
+
+                    {charItems.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic text-center py-3 border border-dashed border-border/60 rounded-lg">
+                        Sua mochila está vazia no momento.
+                      </p>
+                    ) : (
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                        {charItems.map((it) => (
+                          <button
+                            key={it.id}
+                            type="button"
+                            onClick={() => setSelectedItemForModal(it)}
+                            className="flex items-center gap-2.5 p-2 rounded-lg border border-border/80 bg-secondary/30 hover:bg-secondary/70 hover:border-primary/50 transition-all shrink-0 cursor-pointer text-left group min-w-[130px] max-w-[190px]"
+                          >
+                            {it.image_url ? (
+                              <img
+                                src={resolveImageUrl(it.image_url)}
+                                alt={it.item_name}
+                                className="w-8 h-8 rounded object-cover border border-border shrink-0 bg-background"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded bg-primary/10 border border-primary/20 grid place-items-center shrink-0">
+                                <Backpack className="h-4 w-4 text-primary" />
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <div className="font-semibold text-xs text-foreground truncate group-hover:text-primary transition-colors">
+                                {it.item_name}
+                              </div>
+                              <div className="text-[9px] text-muted-foreground font-mono">
+                                Qtd: {it.quantity} • {it.weight}kg
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </Card>
+                );
+              })()}
             </div>
           ) : (
             <div className="text-center py-16 border border-dashed border-border rounded-xl bg-card/25">
@@ -843,24 +1287,12 @@ function TableDetailPage() {
           )}
         </div>
       </div>
-      {/* Character Sheet Popup Modal */}
+
+      {/* Character Sheet Popup Modal (Items 3, 5, 9, 11) */}
       {selectedCharForModal && (() => {
-        // Resolve dynamic character state from tableCharacters to ensure HP updates in real-time
         const modalChar = characters.find((c) => c.id === selectedCharForModal.id) || selectedCharForModal;
         const charDead = modalChar.alive === 0;
         const items = inventoryByCharacter[modalChar.id] ?? [];
-
-        const handleModalHpChange = (sign: number) => {
-          const val = parseInt(modalHpChange, 10) || 0;
-          if (val <= 0) return;
-          const nextHp = Math.max(0, Math.min(modalChar.max_hp, modalChar.hp + (sign * val)));
-          updateCharacter(modalChar.id, { hp: nextHp });
-        };
-
-        const handleModalLevelChange = (diff: number) => {
-          const nextLevel = Math.max(1, modalChar.level + diff);
-          updateCharacter(modalChar.id, { level: nextLevel });
-        };
 
         return (
           <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -868,22 +1300,31 @@ function TableDetailPage() {
               {/* Close Button */}
               <button
                 onClick={() => setSelectedCharForModal(null)}
-                className="absolute top-4 right-4 text-muted-foreground hover:text-foreground text-sm font-bold p-1 rounded bg-secondary/30 hover:bg-secondary/60 cursor-pointer"
+                className="absolute top-4 right-4 text-muted-foreground hover:text-foreground text-sm font-bold p-1 rounded bg-secondary/30 hover:bg-secondary/60 cursor-pointer z-10"
               >
                 ✕ Fechar
               </button>
 
               <div className="p-6 overflow-y-auto space-y-6">
                 {/* Header */}
-                <div>
-                  <div className="text-[10px] uppercase tracking-[0.2em] text-primary font-semibold">Ficha do Herói</div>
-                  <h3 className="font-display text-3xl mt-1 leading-none">{modalChar.name}</h3>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {modalChar.race} · {modalChar.classe} · Nível {modalChar.level}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground/80 font-mono mt-1">
-                    Dono: {modalChar.owner_username || "Jogador"}
-                  </p>
+                <div className="flex items-center gap-4">
+                  {modalChar.image_url ? (
+                    <img src={resolveImageUrl(modalChar.image_url)} alt={modalChar.name} className="w-16 h-16 rounded-lg object-cover border border-primary/40 shadow shrink-0" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center font-display text-2xl font-bold text-primary shrink-0">
+                      {modalChar.name[0]}
+                    </div>
+                  )}
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-primary font-semibold">Ficha do Herói</div>
+                    <h3 className="font-display text-3xl mt-1 leading-none">{modalChar.name}</h3>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {modalChar.race} · {modalChar.classe} · Nível {modalChar.level}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/80 font-mono mt-1">
+                      Dono: {modalChar.owner_username || "Jogador"}
+                    </p>
+                  </div>
                 </div>
 
                 {/* HP & Vital Status */}
@@ -894,7 +1335,7 @@ function TableDetailPage() {
                     </span>
                     <span className={cn(
                       "text-[10px] font-bold uppercase px-2 py-0.5 rounded border",
-                      charDead ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-primary/10 text-primary border-primary/20"
+                      charDead ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-primary/10 text-primary border border-primary/20"
                     )}>
                       {charDead ? "Morto" : "Vivo"}
                     </span>
@@ -906,74 +1347,109 @@ function TableDetailPage() {
                       <span className="text-muted-foreground text-xs">/ {modalChar.max_hp} HP</span>
                     </div>
                     <Progress
-                      value={(modalChar.hp / modalChar.max_hp) * 100}
+                      value={Math.max(0, (modalChar.hp / modalChar.max_hp) * 100)}
                       className={cn("h-2", charDead && "[&>*]:bg-destructive")}
                     />
                   </div>
 
-                  {/* GM HP & Level Controls inside Modal */}
+                  {/* GM Controls inside Modal (Item 3 & 11) */}
                   {isGM && (
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 pt-3">
-                      <div className="flex items-center gap-1.5">
-                        <Input
-                          type="number"
-                          value={modalHpChange}
-                          onChange={(e) => setModalHpChange(e.target.value)}
-                          className="w-14 h-7 text-center text-xs font-mono"
-                        />
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleModalHpChange(-1)}
-                          className="h-7 text-[10px] px-2 font-semibold"
-                        >
-                          Dano
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => handleModalHpChange(1)}
-                          className="h-7 text-[10px] px-2 font-semibold"
-                        >
-                          Cura
-                        </Button>
-                      </div>
-
-                      <div className="flex items-center gap-2 text-xs">
-                        <span>Nível:</span>
-                        <div className="flex gap-1">
+                    <div className="space-y-3 border-t border-border/40 pt-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            type="number"
+                            value={modalHpChange}
+                            onChange={(e) => setModalHpChange(e.target.value)}
+                            className="w-14 h-7 text-center text-xs font-mono"
+                          />
                           <Button
-                            size="icon"
-                            variant="outline"
-                            onClick={() => handleModalLevelChange(-1)}
-                            className="h-6 w-6"
-                            disabled={modalChar.level <= 1}
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleCharacterHpChange(modalChar, -parseInt(modalHpChange, 10))}
+                            className="h-7 text-[10px] px-2 font-semibold"
                           >
-                            -
+                            Dano
                           </Button>
                           <Button
-                            size="icon"
-                            variant="outline"
-                            onClick={() => handleModalLevelChange(1)}
-                            className="h-6 w-6"
+                            size="sm"
+                            onClick={() => handleCharacterHpChange(modalChar, parseInt(modalHpChange, 10))}
+                            className="h-7 text-[10px] px-2 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
                           >
-                            +
+                            Cura
+                          </Button>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleCharacterLevelChange(modalChar, 1)}
+                            className="h-7 text-[10px] px-2 font-semibold border-primary/40 text-primary hover:bg-primary/10"
+                          >
+                            + Subir Nível
                           </Button>
                         </div>
                       </div>
+
+                      {/* GM Death Confirmation Controls (Item 11) */}
+                      {modalChar.hp === 0 && modalChar.alive === 1 && (
+                        <div className="p-2 rounded bg-destructive/10 border border-destructive/30 space-y-1.5">
+                          <p className="text-[10px] font-bold text-destructive text-center">
+                            ⚠️ Vida zerada! O que o Mestre fará?
+                          </p>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleKillCharacter(modalChar)}
+                              className="h-6 text-[10px] px-2 font-bold flex-1"
+                            >
+                              <Skull className="h-3 w-3 mr-1" /> Confirmar Morte (Matar)
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleStabilizeCharacter(modalChar)}
+                              className="h-6 text-[10px] px-2 font-bold flex-1 text-emerald-400 border-emerald-500/40 hover:bg-emerald-950/30"
+                            >
+                              <Heart className="h-3 w-3 mr-1" /> Estabilizar (1 HP)
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
 
-                {/* Attributes Grid */}
-                <div>
-                  <h4 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-3">Atributos</h4>
+                {/* Attributes Grid & Stat Allocation (Item 5) */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <h4 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Atributos</h4>
+                    {(modalChar.unallocated_points ?? 0) > 0 && (
+                      <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30 animate-pulse">
+                        ✨ {(modalChar.unallocated_points ?? 0)} ponto(s) disponíveis
+                      </span>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                     {["str", "agi", "int", "vit", "sur", "mag"].map((k) => {
                       const attrVal = modalChar.attributes?.[k] ?? 5;
                       return (
-                        <div key={k} className="p-2 border border-border rounded text-center bg-card/40">
+                        <div key={k} className="p-2 border border-border rounded text-center bg-card/40 relative group">
                           <div className="text-[10px] uppercase font-mono text-muted-foreground">{k}</div>
                           <div className="text-sm font-semibold mt-0.5">{attrVal}</div>
+                          {(modalChar.unallocated_points ?? 0) > 0 && (
+                            <Button
+                              size="icon"
+                              className="absolute top-1 right-1 h-5 w-5 text-[10px] bg-amber-500 hover:bg-amber-600 text-black font-bold rounded-full"
+                              onClick={() => allocateStat(modalChar.id, k)}
+                              title={`Adicionar +1 ponto em ${k.toUpperCase()}`}
+                            >
+                              +
+                            </Button>
+                          )}
                         </div>
                       );
                     })}
@@ -992,7 +1468,10 @@ function TableDetailPage() {
                       </p>
                     ) : (
                       items.map((it) => (
-                        <div key={it.id} className="p-2 border border-border rounded bg-card/60 flex items-center justify-between text-xs">
+                        <div key={it.id} className="p-2 border border-border rounded bg-card/60 flex items-center justify-between text-xs gap-2">
+                          {it.image_url && (
+                            <img src={resolveImageUrl(it.image_url)} alt={it.item_name} className="w-8 h-8 rounded object-cover border border-border shrink-0" />
+                          )}
                           <div className="min-w-0 flex-1">
                             <span className="font-semibold text-foreground">{it.item_name}</span>
                             {it.description && <p className="text-[10px] text-muted-foreground truncate">{it.description}</p>}
@@ -1032,6 +1511,100 @@ function TableDetailPage() {
           </div>
         );
       })()}
+
+      {/* Compact Item Info Popup Modal */}
+      {selectedItemForModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-sm bg-card border border-border shadow-2xl relative p-6 space-y-4">
+            <button
+              type="button"
+              onClick={() => setSelectedItemForModal(null)}
+              className="absolute top-3 right-3 text-muted-foreground hover:text-foreground text-xs font-bold p-1.5 rounded bg-secondary/40 hover:bg-secondary cursor-pointer"
+            >
+              ✕ Fechar
+            </button>
+
+            <div className="flex flex-col items-center text-center space-y-3">
+              {selectedItemForModal.image_url ? (
+                <img
+                  src={resolveImageUrl(selectedItemForModal.image_url)}
+                  alt={selectedItemForModal.item_name}
+                  onClick={() => setZoomedImage({ url: selectedItemForModal.image_url, title: selectedItemForModal.item_name })}
+                  className="w-28 h-28 rounded-xl object-cover border-2 border-primary/40 shadow-lg bg-background cursor-pointer hover:scale-105 transition-transform"
+                  title="Clique para ampliar"
+                />
+              ) : (
+                <div className="w-24 h-24 rounded-xl bg-primary/10 border-2 border-primary/30 grid place-items-center">
+                  <Backpack className="h-12 w-12 text-primary" />
+                </div>
+              )}
+
+              <div>
+                <h3 className="font-display text-2xl font-bold">{selectedItemForModal.item_name}</h3>
+                <div className="flex justify-center gap-3 text-xs font-mono text-muted-foreground mt-1">
+                  <span>Quantidade: <strong className="text-foreground">{selectedItemForModal.quantity}</strong></span>
+                  <span>•</span>
+                  <span>Peso: <strong className="text-foreground">{selectedItemForModal.weight} kg</strong></span>
+                </div>
+              </div>
+
+              {selectedItemForModal.description ? (
+                <p className="text-xs text-muted-foreground bg-secondary/30 border border-border/50 p-3 rounded-lg w-full text-left leading-relaxed">
+                  {selectedItemForModal.description}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground/60 italic">Sem descrição registrada.</p>
+              )}
+
+              {activeSessionId && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    handleShareItemToChat(selectedItemForModal);
+                    setSelectedItemForModal(null);
+                  }}
+                  className="w-full text-xs font-semibold flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white mt-2"
+                >
+                  <Share2 className="h-4 w-4" /> Compartilhar no Chat
+                </Button>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Large Image Preview Popup Modal */}
+      {zoomedImage && (
+        <div
+          className="fixed inset-0 bg-black/85 backdrop-blur-md z-[60] flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setZoomedImage(null)}
+        >
+          <div
+            className="relative max-w-3xl max-h-[90vh] flex flex-col items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setZoomedImage(null)}
+              className="absolute -top-10 right-0 text-white/80 hover:text-white text-xs font-bold px-2.5 py-1 rounded bg-black/60 hover:bg-black border border-white/20 cursor-pointer"
+            >
+              ✕ Fechar
+            </button>
+
+            <img
+              src={resolveImageUrl(zoomedImage.url)}
+              alt={zoomedImage.title || "Imagem do item"}
+              className="max-w-full max-h-[80vh] object-contain rounded-xl border-2 border-primary/40 shadow-2xl bg-black/40"
+            />
+
+            {zoomedImage.title && (
+              <p className="mt-3 text-sm font-display font-semibold text-white/90 bg-black/70 px-4 py-1.5 rounded-full border border-white/10 shadow">
+                {zoomedImage.title}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

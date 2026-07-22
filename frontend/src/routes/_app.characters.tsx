@@ -16,6 +16,7 @@ export const Route = createFileRoute("/_app/characters")({
 
 function CharactersPage() {
   const { characters } = useCharacters();
+  const sortedCharacters = [...characters].sort((a, b) => b.alive - a.alive);
 
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto">
@@ -35,7 +36,7 @@ function CharactersPage() {
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {characters.map((c) => (
+        {sortedCharacters.map((c) => (
           <CharacterCard key={c.id} character={c} />
         ))}
       </div>

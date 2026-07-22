@@ -1,11 +1,22 @@
-Error in renderToReadableStream: ReferenceError: useNavigate is not defined
-    at CharacterSheet (C:\Users\cassio.santos\Documents\Python\RPGv2\frontend\src\routes\character.$id.tsx:29:20)
-    at Object.react_stack_bottom_frame (C:\Users\cassio.santos\Documents\Python\RPGv2\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:10288:18)
-    at renderWithHooks (C:\Users\cassio.santos\Documents\Python\RPGv2\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:5298:19)
-    at renderElement (C:\Users\cassio.santos\Documents\Python\RPGv2\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:5733:23)
-    at retryNode (C:\Users\cassio.santos\Documents\Python\RPGv2\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:6664:31)
-    at renderNodeDestructive (C:\Users\cassio.santos\Documents\Python\RPGv2\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:6614:11)
-    at finishFunctionComponent (C:\Users\cassio.santos\Documents\Python\RPGv2\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:5342:13)
-    at renderElement (C:\Users\cassio.santos\Documents\Python\RPGv2\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:5788:11)
-    at retryNode (C:\Users\cassio.santos\Documents\Python\RPGv2\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:6664:31)
-    at renderNodeDestructive (C:\Users\cassio.santos\Documents\Python\RPGv2\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:6614:11) { componentStack: [Getter] }
+Error in renderToReadableStream: ReferenceError: CharacterContext is not defined
+    at CharacterProvider (D:\cassio\projetos\RPG-Forge\frontend\src\context\character-context.tsx:737:6)
+    at Object.react_stack_bottom_frame (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:10288:18)
+    at renderWithHooks (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:5298:19)
+    at renderElement (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:5733:23)
+    at retryNode (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:6664:31)
+    at renderNodeDestructive (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:6614:11)
+    at renderElement (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:6300:15)
+    at retryNode (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:6664:31)
+    at renderNodeDestructive (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:6614:11)
+    at finishFunctionComponent (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:5342:13) { componentStack: [Getter] }
+ReferenceError: CharacterContext is not defined
+    at CharacterProvider (D:\cassio\projetos\RPG-Forge\frontend\src\context\character-context.tsx:737:6)
+    at Object.react_stack_bottom_frame (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:10288:18)
+    at renderWithHooks (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:5298:19)
+    at renderElement (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:5733:23)
+    at retryNode (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:6664:31)
+    at renderNodeDestructive (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:6614:11)
+    at renderElement (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:6300:15)
+    at retryNode (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:6664:31)
+    at renderNodeDestructive (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:6614:11)
+    at finishFunctionComponent (D:\cassio\projetos\RPG-Forge\frontend\node_modules\react-dom\cjs\react-dom-server.node.development.js:5342:13)

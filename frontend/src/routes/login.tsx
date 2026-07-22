@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { useCharacters } from "@/context/character-context";
+import { useCharacters, API_BASE } from "@/context/character-context";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -34,7 +34,7 @@ function LoginPage() {
     e.preventDefault();
     setError("");
     try {
-      const response = await fetch("http://localhost:8000/api/login", {
+      const response = await fetch(`${API_BASE}/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
