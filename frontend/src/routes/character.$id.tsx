@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, notFound } from "@tanstack/react-router";
-import { ArrowLeft, MapPin, Ruler, Cake, Palette, Scroll, Heart, Pencil, Check, X } from "lucide-react";
+import { ArrowLeft, MapPin, Ruler, Cake, Palette, Scroll, Heart, Pencil, Check, X, Skull } from "lucide-react";
 import { useCharacters, API_BASE, resolveImageUrl } from "@/context/character-context";
 import { ImageInput } from "@/components/ui/image-input";
 import { SelectWithOther } from "@/components/ui/select-with-other";
@@ -206,6 +206,13 @@ function CharacterSheet() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {isDead && (
+          <div className="md:col-span-2 lg:col-span-3 p-4 bg-destructive/15 border border-destructive/40 rounded-xl text-destructive text-sm font-semibold flex items-center justify-center gap-2 shadow-lg animate-in fade-in duration-200">
+            <Skull className="h-5 w-5 shrink-0" />
+            <span>HERÓI MORTO — Edições, alocação de atributos e ações da ficha estão desabilitadas.</span>
+          </div>
+        )}
+
         {/* Left column — Identidade & HP & Lore */}
         <div className="space-y-6">
           <Card className="p-6">
@@ -227,7 +234,7 @@ function CharacterSheet() {
                   <h2 className="font-display text-3xl truncate">{character.name}</h2>
                 </div>
               </div>
-              {canEditLore && !isEditingIdentity && (
+              {canEditLore && !isEditingIdentity && !isDead && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -383,7 +390,7 @@ function CharacterSheet() {
               <Scroll className="h-4 w-4 text-primary" />
               <div className="text-xs uppercase tracking-[0.3em] text-primary">Lore / História</div>
             </div>
-            {canEditLore ? (
+            {canEditLore && !isDead ? (
               <>
                 <textarea
                   value={lore}
@@ -409,7 +416,7 @@ function CharacterSheet() {
           <Card className="p-6 space-y-4">
             <div className="flex justify-between items-center">
               <div className="text-xs uppercase tracking-[0.3em] text-primary">Atributos</div>
-              {(character.unallocated_points ?? 0) > 0 && (
+              {(character.unallocated_points ?? 0) > 0 && !isDead && (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 animate-pulse">
                   ✨ {(character.unallocated_points ?? 0)} Ponto(s) para distribuir!
                 </span>
@@ -420,7 +427,7 @@ function CharacterSheet() {
               {ATTR_ORDER.map((k) => (
                 <div key={k} className="relative group">
                   <AttributeBox k={k} value={character.attributes[k]} />
-                  {(character.unallocated_points ?? 0) > 0 && canEditLore && (
+                  {(character.unallocated_points ?? 0) > 0 && canEditLore && !isDead && (
                     <Button
                       size="icon"
                       className="absolute top-1 right-1 h-6 w-6 text-xs bg-amber-500 hover:bg-amber-600 text-black font-bold rounded-full shadow"

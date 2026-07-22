@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Dices, Sparkles, Trash2, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Dices, Sparkles, Trash2, ShieldAlert, ShieldCheck, Skull } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -430,74 +430,93 @@ export function DiceRoller({ tableId, tableCharacters, isGM }: DiceRollerProps) 
         </div>
 
         {/* Controls: Modifiers & Roles */}
-        <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8 pt-6 border-t border-border">
-          {/* Character selection */}
-          <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-widest text-muted-foreground">Quem está rolando?</Label>
-            <select
-              value={characterName}
-              onChange={(e) => setCharacterName(e.target.value)}
-              disabled={rolling}
-              className="w-full rounded-md bg-input/40 border border-border px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground"
-            >
-              {isGM && <option value="Mestre" className="bg-card text-foreground">Mestre (GM)</option>}
-              {tableCharacters.map((c) => (
-                <option key={c.id} value={c.name} className="bg-card text-foreground">
-                  {c.name} ({c.classe})
-                </option>
-              ))}
-              {tableCharacters.length === 0 && !isGM && (
-                <option value="Jogador" className="bg-card text-foreground">Jogador (Sem herói vinculado)</option>
-              )}
-            </select>
-          </div>
+        {(() => {
+          const selectedChar = tableCharacters.find((c) => c.name === characterName);
+          const isSelectedCharDead = selectedChar ? selectedChar.alive === 0 : false;
 
-          {/* Modifier Input */}
-          <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-widest text-muted-foreground">Modificador</Label>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                disabled={rolling}
-                onClick={() => setModifier((prev) => prev - 1)}
-                className="h-9 w-9 border-border bg-input/20"
-              >
-                -
-              </Button>
-              <div className="flex-1 bg-input/35 border border-border rounded-md flex items-center justify-center font-mono font-bold text-sm">
-                {modifier >= 0 ? `+${modifier}` : modifier}
+          return (
+            <>
+              <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8 pt-6 border-t border-border">
+                {/* Character selection */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground">Quem está rolando?</Label>
+                  <select
+                    value={characterName}
+                    onChange={(e) => setCharacterName(e.target.value)}
+                    disabled={rolling}
+                    className="w-full rounded-md bg-input/40 border border-border px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground"
+                  >
+                    {isGM && <option value="Mestre" className="bg-card text-foreground">Mestre (GM)</option>}
+                    {tableCharacters.map((c) => (
+                      <option key={c.id} value={c.name} className="bg-card text-foreground">
+                        {c.name} ({c.classe}){c.alive === 0 ? " — 💀 MORTO" : ""}
+                      </option>
+                    ))}
+                    {tableCharacters.length === 0 && !isGM && (
+                      <option value="Jogador" className="bg-card text-foreground">Jogador (Sem herói vinculado)</option>
+                    )}
+                  </select>
+                </div>
+
+                {/* Modifier Input */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground">Modificador</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      disabled={rolling || isSelectedCharDead}
+                      onClick={() => setModifier((prev) => prev - 1)}
+                      className="h-9 w-9 border-border bg-input/20"
+                    >
+                      -
+                    </Button>
+                    <div className="flex-1 bg-input/35 border border-border rounded-md flex items-center justify-center font-mono font-bold text-sm">
+                      {modifier >= 0 ? `+${modifier}` : modifier}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      disabled={rolling || isSelectedCharDead}
+                      onClick={() => setModifier((prev) => prev + 1)}
+                      className="h-9 w-9 border-border bg-input/20"
+                    >
+                      +
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={rolling || modifier === 0 || isSelectedCharDead}
+                      onClick={() => setModifier(0)}
+                      className="text-xs font-mono"
+                    >
+                      Limpar
+                    </Button>
+                  </div>
+                </div>
               </div>
-              <Button
-                variant="outline"
-                size="icon"
-                disabled={rolling}
-                onClick={() => setModifier((prev) => prev + 1)}
-                className="h-9 w-9 border-border bg-input/20"
-              >
-                +
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={rolling || modifier === 0}
-                onClick={() => setModifier(0)}
-                className="text-xs font-mono"
-              >
-                Limpar
-              </Button>
-            </div>
-          </div>
-        </div>
 
-        {/* Big Roll Button */}
-        <Button
-          onClick={handleRoll}
-          disabled={rolling}
-          className="w-full mt-6 py-6 font-display text-xl tracking-wider uppercase font-bold neon-border hover:bg-primary hover:text-black transition-all"
-        >
-          <Sparkles className="mr-2 h-5 w-5" /> ROLAR DADO
-        </Button>
+              {isSelectedCharDead && (
+                <div className="w-full mt-4 p-3 bg-destructive/15 border border-destructive/40 rounded-lg text-destructive text-xs font-semibold flex items-center justify-center gap-2 animate-in fade-in duration-200">
+                  <Skull className="h-4 w-4" />
+                  Personagem Morto — Rolagens de Dados Bloqueadas
+                </div>
+              )}
+
+              {/* Big Roll Button */}
+              <Button
+                onClick={handleRoll}
+                disabled={rolling || isSelectedCharDead}
+                className={cn(
+                  "w-full mt-6 py-6 font-display text-xl tracking-wider uppercase font-bold neon-border hover:bg-primary hover:text-black transition-all",
+                  isSelectedCharDead && "opacity-50 cursor-not-allowed bg-muted text-muted-foreground border-destructive/40 hover:bg-muted hover:text-muted-foreground"
+                )}
+              >
+                <Sparkles className="mr-2 h-5 w-5" /> {isSelectedCharDead ? "PERSONAGEM MORTO" : "ROLAR DADO"}
+              </Button>
+            </>
+          );
+        })()}
       </Card>
 
       {/* History Log */}

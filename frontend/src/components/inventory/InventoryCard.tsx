@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Backpack, Trash2, Plus } from "lucide-react";
+import { Backpack, Trash2, Plus, Skull } from "lucide-react";
 import { useCharacters, resolveImageUrl } from "@/context/character-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -49,6 +49,7 @@ export function InventoryCard({ characterId }: { characterId: number }) {
     }
   };
 
+  const isDead = character?.alive === 0;
   const currentWeight = items.reduce((sum, it) => sum + ((it.weight || 0) * (it.quantity || 1)), 0);
   const maxWeight = (character?.attributes?.str ?? 5) * 3;
 
@@ -62,6 +63,13 @@ export function InventoryCard({ characterId }: { characterId: number }) {
           {items.length} item(s)
         </span>
       </div>
+
+      {isDead && (
+        <div className="p-3 bg-destructive/15 border border-destructive/40 rounded-lg text-destructive text-xs font-semibold flex items-center gap-2">
+          <Skull className="h-4 w-4 shrink-0" />
+          Personagem Morto — Inventário Bloqueado
+        </div>
+      )}
 
       <CapacityBar current={currentWeight} max={maxWeight} />
 
@@ -101,7 +109,7 @@ export function InventoryCard({ characterId }: { characterId: number }) {
                     {it.weight}kg × {it.quantity}
                   </div>
                 </div>
-                {isGM && (
+                {isGM && !isDead && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -117,7 +125,7 @@ export function InventoryCard({ characterId }: { characterId: number }) {
         )}
       </div>
 
-      {isGM && (
+      {isGM && !isDead && (
         <div className="border-t border-border pt-4">
           {open ? (
             <form onSubmit={handleAdd} className="space-y-3">

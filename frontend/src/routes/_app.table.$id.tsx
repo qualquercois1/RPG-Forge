@@ -239,11 +239,13 @@ function TableDetailPage() {
     loadGuests();
   }, [tableId, isGM]);
 
-  // Handle auto-redirection to forge if user is not GM and has no character for this table
+  // Handle auto-redirection to forge if user is not GM and has no ALIVE character for this table
   useEffect(() => {
     if (currentTable && user && Number(currentTable.game_master_id) !== Number(user.id) && tableCharacters[tableId] !== undefined) {
-      const myCharsForTable = (tableCharacters[tableId] || []).filter((c) => Number(c.user_id) === Number(user.id));
-      if (myCharsForTable.length === 0) {
+      const myAliveCharsForTable = (tableCharacters[tableId] || []).filter(
+        (c) => Number(c.user_id) === Number(user.id) && c.alive === 1
+      );
+      if (myAliveCharsForTable.length === 0) {
         navigate({ to: "/forge", search: { tableId: String(tableId) } as any });
       }
     }
@@ -253,17 +255,20 @@ function TableDetailPage() {
   useEffect(() => {
     if (isSelectingCharacter) return;
 
-    if (selectedCharacterId !== null && myChars.length > 0) {
-      const stillExists = myChars.some((c) => c.id === selectedCharacterId);
+    const availableChars = isGM ? characters : myChars.filter((c) => c.alive === 1);
+    if (availableChars.length === 0) return;
+
+    if (selectedCharacterId !== null) {
+      const stillExists = availableChars.some((c) => c.id === selectedCharacterId);
       if (!stillExists) {
-        setSelectedCharacterId(myChars[0].id);
-        localStorage.setItem(`table_char_${tableId}`, String(myChars[0].id));
+        setSelectedCharacterId(availableChars[0].id);
+        localStorage.setItem(`table_char_${tableId}`, String(availableChars[0].id));
       }
-    } else if (selectedCharacterId === null && myChars.length > 0) {
-      setSelectedCharacterId(myChars[0].id);
-      localStorage.setItem(`table_char_${tableId}`, String(myChars[0].id));
+    } else if (selectedCharacterId === null) {
+      setSelectedCharacterId(availableChars[0].id);
+      localStorage.setItem(`table_char_${tableId}`, String(availableChars[0].id));
     }
-  }, [myChars, selectedCharacterId, tableId, isSelectingCharacter]);
+  }, [myChars, characters, selectedCharacterId, tableId, isSelectingCharacter, isGM]);
 
   const handleSendTableInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -619,22 +624,23 @@ function TableDetailPage() {
               <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
               <div className="flex justify-between items-center">
                 <span className="text-[10px] uppercase font-mono tracking-widest text-primary font-bold">
-                  Seu Herói Ativo
+                  {isGM ? "Herói Ativo Selecionado" : "Seu Herói Ativo"}
                 </span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-5 px-1.5 text-[9px] font-mono uppercase text-muted-foreground hover:text-foreground cursor-pointer"
-                  onClick={() => {
-                    setSelectedCharacterId(null);
-                    localStorage.removeItem(`table_char_${tableId}`);
-                  }}
-                >
-                  Trocar
-                </Button>
+                {isGM && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-5 px-1.5 text-[9px] font-mono uppercase text-muted-foreground hover:text-foreground cursor-pointer"
+                    onClick={() => {
+                      setIsSelectingCharacter(true);
+                    }}
+                  >
+                    Trocar
+                  </Button>
+                )}
               </div>
               {(() => {
-                const char = myChars.find((c) => c.id === selectedCharacterId);
+                const char = characters.find((c) => c.id === selectedCharacterId) || myChars.find((c) => c.id === selectedCharacterId);
                 if (!char) return null;
                 return (
                   <div className="flex items-center justify-between gap-4">
@@ -1712,6 +1718,80 @@ function TableDetailPage() {
         </Sheet>
       )}
 
+      {/* GM Character Selector Modal */}
+      {isGM && isSelectingCharacter && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md p-6 bg-card border border-border shadow-2xl space-y-5 relative rounded-xl">
+            <div className="flex justify-between items-center border-b border-border pb-3">
+              <h3 className="font-display text-xl flex items-center gap-2 text-primary">
+                <User className="h-5 w-5" /> Trocar Herói Ativo (Mestre)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsSelectingCharacter(false)}
+                className="text-muted-foreground hover:text-foreground text-xs font-bold p-1 rounded bg-secondary/30 hover:bg-secondary/60 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Selecione qual personagem da mesa você deseja visualizar ou gerenciar ativamente:
+            </p>
+
+            <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1 scrollbar-thin">
+              {characters.map((char) => (
+                <button
+                  key={char.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCharacterId(char.id);
+                    localStorage.setItem(`table_char_${tableId}`, String(char.id));
+                    setIsSelectingCharacter(false);
+                  }}
+                  className={cn(
+                    "w-full p-3 rounded-lg border text-left flex items-center justify-between transition-all cursor-pointer",
+                    selectedCharacterId === char.id
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-secondary/20 hover:border-primary/50 hover:bg-primary/5"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    {char.image_url ? (
+                      <img src={resolveImageUrl(char.image_url)} alt={char.name} className="w-9 h-9 rounded-lg object-cover border border-primary/30 shrink-0" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center font-display text-base font-bold text-primary shrink-0">
+                        {char.name[0]}
+                      </div>
+                    )}
+                    <div>
+                      <div className="font-display text-base font-bold text-foreground leading-tight">
+                        {char.name}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground font-mono">
+                        {char.classe} • {char.owner_username || "Jogador"}
+                      </div>
+                    </div>
+                  </div>
+                  <span className={cn(
+                    "text-[9px] uppercase font-bold px-1.5 py-0.5 rounded",
+                    char.alive === 1 ? "bg-primary/10 text-primary border border-primary/20" : "bg-destructive/10 text-destructive border border-destructive/20"
+                  )}>
+                    {char.alive === 1 ? "Vivo" : "Morto"}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <Button variant="outline" size="sm" onClick={() => setIsSelectingCharacter(false)} className="text-xs cursor-pointer">
+                Cancelar
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Floating Side Button & Sheet for Character Backpack (Everyone) */}
       <Sheet open={isBackpackOpen} onOpenChange={setIsBackpackOpen}>
         <SheetTrigger asChild>
@@ -1777,7 +1857,7 @@ function TableDetailPage() {
                 >
                   {myChars.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name} ({c.classe})
+                      {c.name} ({c.classe}){c.alive === 0 ? " — 💀 MORTO" : ""}
                     </option>
                   ))}
                 </select>
@@ -1789,115 +1869,129 @@ function TableDetailPage() {
             <div className="text-sm text-muted-foreground text-center py-12 px-4 border border-dashed border-border rounded-xl mt-4">
               Nenhum personagem selecionado para esta mesa.
             </div>
-          ) : (
-            <div className="flex-1 flex flex-col min-h-0 space-y-3 mt-4">
-              {/* Search Bar */}
-              {(inventoryByCharacter[selectedCharacterId] ?? []).length > 0 && (
-                <div className="relative shrink-0">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                  <Input
-                    type="text"
-                    placeholder="Pesquisar equipamento por nome ou descrição..."
-                    value={backpackSearchQuery}
-                    onChange={(e) => setBackpackSearchQuery(e.target.value)}
-                    className="pl-8 pr-8 h-8 text-xs bg-background/70 border-border focus:border-primary"
-                  />
-                  {backpackSearchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setBackpackSearchQuery("")}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
-                      title="Limpar pesquisa"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              )}
+          ) : (() => {
+            const activeChar = characters.find((c) => c.id === selectedCharacterId);
+            const isDead = activeChar?.alive === 0;
 
-              {/* Items List */}
-              <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 scrollbar-thin">
-                {(inventoryByCharacter[selectedCharacterId] ?? []).length === 0 ? (
-                  <div className="text-sm text-muted-foreground/70 text-center py-12 px-4 border border-dashed border-border rounded-xl space-y-3">
-                    <Backpack className="h-10 w-10 text-muted-foreground/40 mx-auto" />
-                    <p className="font-medium text-foreground">Sua mochila está vazia</p>
-                    <p className="text-xs">O Mestre (GM) pode criar e atribuir novos itens a você pelo Baú da Mesa.</p>
+            return (
+              <div className="flex-1 flex flex-col min-h-0 space-y-3 mt-4">
+                {isDead && (
+                  <div className="p-3 bg-destructive/15 border border-destructive/40 rounded-xl text-destructive text-xs font-semibold flex items-center gap-2 animate-in fade-in duration-200">
+                    <Skull className="h-4 w-4 shrink-0" />
+                    Este herói está morto. As ações na mochila (compartilhar, excluir) estão bloqueadas.
                   </div>
-                ) : (() => {
-                  const charItems = inventoryByCharacter[selectedCharacterId] ?? [];
-                  const filtered = charItems.filter((it) => {
-                    if (!backpackSearchQuery.trim()) return true;
-                    const q = backpackSearchQuery.toLowerCase().trim();
-                    return (
-                      it.item_name.toLowerCase().includes(q) ||
-                      (it.description && it.description.toLowerCase().includes(q))
-                    );
-                  });
+                )}
 
-                  if (filtered.length === 0) {
-                    return (
-                      <div className="text-xs text-muted-foreground text-center py-8 px-4 border border-dashed border-border rounded-xl">
-                        Nenhum item encontrado para "<span className="text-foreground font-semibold">{backpackSearchQuery}</span>".
-                      </div>
-                    );
-                  }
+                {/* Search Bar */}
+                {(inventoryByCharacter[selectedCharacterId] ?? []).length > 0 && (
+                  <div className="relative shrink-0">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      type="text"
+                      placeholder="Pesquisar equipamento por nome ou descrição..."
+                      value={backpackSearchQuery}
+                      onChange={(e) => setBackpackSearchQuery(e.target.value)}
+                      className="pl-8 pr-8 h-8 text-xs bg-background/70 border-border focus:border-primary"
+                    />
+                    {backpackSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setBackpackSearchQuery("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                        title="Limpar pesquisa"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                )}
 
-                  return filtered.map((it) => (
-                    <Card key={it.id} className="p-3 bg-card/60 border-border/80 flex flex-col gap-2 hover:bg-card/90 transition-all rounded-lg shadow-xs">
-                      <div className="flex items-center justify-between gap-2">
-                        <div
-                          onClick={() => setSelectedItemForModal(it)}
-                          className="flex items-center gap-2 min-w-0 cursor-pointer group flex-1"
-                          title="Clique para ver detalhes do item"
-                        >
-                          <h5 className="font-semibold text-xs text-foreground truncate group-hover:text-primary transition-colors leading-tight">
-                            {it.item_name}
-                          </h5>
-                          <span className="text-[9px] font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded font-bold shrink-0">
-                            x{it.quantity}
-                          </span>
-                          <span className="text-[9px] font-mono bg-secondary/80 px-1.5 py-0.5 rounded text-muted-foreground shrink-0">
-                            {((it.weight || 0) * (it.quantity || 1)).toFixed(1)} kg
-                          </span>
+                {/* Items List */}
+                <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 scrollbar-thin">
+                  {(inventoryByCharacter[selectedCharacterId] ?? []).length === 0 ? (
+                    <div className="text-sm text-muted-foreground/70 text-center py-12 px-4 border border-dashed border-border rounded-xl space-y-3">
+                      <Backpack className="h-10 w-10 text-muted-foreground/40 mx-auto" />
+                      <p className="font-medium text-foreground">Sua mochila está vazia</p>
+                      <p className="text-xs">O Mestre (GM) pode criar e atribuir novos itens a você pelo Baú da Mesa.</p>
+                    </div>
+                  ) : (() => {
+                    const charItems = inventoryByCharacter[selectedCharacterId] ?? [];
+                    const filtered = charItems.filter((it) => {
+                      if (!backpackSearchQuery.trim()) return true;
+                      const q = backpackSearchQuery.toLowerCase().trim();
+                      return (
+                        it.item_name.toLowerCase().includes(q) ||
+                        (it.description && it.description.toLowerCase().includes(q))
+                      );
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="text-xs text-muted-foreground text-center py-8 px-4 border border-dashed border-border rounded-xl">
+                          Nenhum item encontrado para "<span className="text-foreground font-semibold">{backpackSearchQuery}</span>".
+                        </div>
+                      );
+                    }
+
+                    return filtered.map((it) => (
+                      <Card key={it.id} className={cn("p-3 bg-card/60 border-border/80 flex flex-col gap-2 hover:bg-card/90 transition-all rounded-lg shadow-xs", isDead && "opacity-75 bg-muted/20")}>
+                        <div className="flex items-center justify-between gap-2">
+                          <div
+                            onClick={() => setSelectedItemForModal(it)}
+                            className="flex items-center gap-2 min-w-0 cursor-pointer group flex-1"
+                            title="Clique para ver detalhes do item"
+                          >
+                            <h5 className="font-semibold text-xs text-foreground truncate group-hover:text-primary transition-colors leading-tight">
+                              {it.item_name}
+                            </h5>
+                            <span className="text-[9px] font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded font-bold shrink-0">
+                              x{it.quantity}
+                            </span>
+                            <span className="text-[9px] font-mono bg-secondary/80 px-1.5 py-0.5 rounded text-muted-foreground shrink-0">
+                              {((it.weight || 0) * (it.quantity || 1)).toFixed(1)} kg
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              disabled={isDead}
+                              onClick={() => handleShareItemToChat(it)}
+                              className="h-7 w-7 text-muted-foreground hover:text-purple-400 hover:bg-purple-950/20 shrink-0 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                              title={isDead ? "Personagem morto — ação bloqueada" : "Compartilhar no Chat da Mesa"}
+                            >
+                              <Share2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              disabled={isDead}
+                              onClick={() => handleDeleteBackpackItem(it.id)}
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                              title={isDead ? "Personagem morto — ação bloqueada" : "Remover Item da Mochila"}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
 
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => handleShareItemToChat(it)}
-                            className="h-7 w-7 text-muted-foreground hover:text-purple-400 hover:bg-purple-950/20 shrink-0 cursor-pointer"
-                            title="Compartilhar no Chat da Mesa"
+                        {it.description && (
+                          <p
+                            onClick={() => setSelectedItemForModal(it)}
+                            className="text-[11px] text-muted-foreground leading-tight cursor-pointer truncate"
+                            title={it.description}
                           >
-                            <Share2 className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => handleDeleteBackpackItem(it.id)}
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 cursor-pointer"
-                            title="Remover Item da Mochila"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-
-                      {it.description && (
-                        <p
-                          onClick={() => setSelectedItemForModal(it)}
-                          className="text-[11px] text-muted-foreground leading-tight cursor-pointer truncate"
-                          title={it.description}
-                        >
-                          {it.description}
-                        </p>
-                      )}
-                    </Card>
-                  ));
-                })()}
+                            {it.description}
+                          </p>
+                        )}
+                      </Card>
+                    ));
+                  })()}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </SheetContent>
       </Sheet>
     </div>
