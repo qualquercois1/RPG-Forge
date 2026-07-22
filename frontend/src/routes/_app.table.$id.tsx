@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useRef } from "react";
-import { ArrowLeft, ArrowDown, Scroll, Plus, Dices, Send, Skull, Shield, Heart, RefreshCw, Backpack, Trash2, Users, User, Share2, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowDown, Scroll, Plus, Dices, Send, Skull, Shield, Heart, RefreshCw, Backpack, Trash2, Users, User, Share2, Sparkles, Package, Search } from "lucide-react";
 import { useCharacters, type Character, resolveImageUrl } from "@/context/character-context";
 import { ImageInput } from "@/components/ui/image-input";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 export const Route = createFileRoute("/_app/table/$id")({
   head: ({ params }) => ({
@@ -26,6 +35,27 @@ export const Route = createFileRoute("/_app/table/$id")({
   }),
   component: TableDetailPage,
 });
+
+function ChestIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M3 10V7a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v3" />
+      <rect x="2" y="10" width="20" height="10" rx="2" />
+      <path d="M2 10h20" />
+      <rect x="10" y="9.5" width="4" height="4" rx="1" fill="currentColor" fillOpacity="0.3" />
+      <circle cx="12" cy="11.5" r="0.75" fill="currentColor" />
+    </svg>
+  );
+}
 
 function TableDetailPage() {
   const { id } = Route.useParams();
@@ -76,12 +106,19 @@ function TableDetailPage() {
   const [creatingSession, setCreatingSession] = useState(false);
 
   // States for Table Items (GM only)
+  const [isChestOpen, setIsChestOpen] = useState(false);
+  const [chestTab, setChestTab] = useState<"items" | "create">("items");
+  const [chestSearchQuery, setChestSearchQuery] = useState("");
   const [newItemName, setNewItemName] = useState("");
   const [newItemDesc, setNewItemDesc] = useState("");
   const [newItemWeight, setNewItemWeight] = useState("1.0");
   const [newItemImageUrl, setNewItemImageUrl] = useState("");
   const [assignCharId, setAssignCharId] = useState<Record<number, string>>({});
   const [assignQty, setAssignQty] = useState<Record<number, string>>({});
+
+  // States for Hero Backpack (Everyone)
+  const [isBackpackOpen, setIsBackpackOpen] = useState(false);
+  const [backpackSearchQuery, setBackpackSearchQuery] = useState("");
 
   const [chatAssignCharId, setChatAssignCharId] = useState<Record<number, string>>({});
 
@@ -354,6 +391,7 @@ function TableDetailPage() {
       setNewItemDesc("");
       setNewItemWeight("1.0");
       setNewItemImageUrl("");
+      setChestTab("items");
     } else {
       alert(res.error || "Erro ao criar item.");
     }
@@ -424,6 +462,12 @@ function TableDetailPage() {
 
   const handleDeleteItem = async (itemId: number) => {
     await deleteTableItem(itemId, tableId);
+  };
+
+  const handleDeleteBackpackItem = async (itemId: number) => {
+    if (!selectedCharacterId) return;
+    await deleteInventoryItem(itemId, selectedCharacterId);
+    await fetchInventory(selectedCharacterId);
   };
 
   if (!currentTable) {
@@ -527,6 +571,11 @@ function TableDetailPage() {
             <RefreshCw className="h-4 w-4" /> Atualizar
           </Button>
           {isGM && (
+            <Button variant="outline" size="sm" onClick={() => setIsChestOpen(true)} className="cursor-pointer gap-1.5">
+              <ChestIcon className="h-4 w-4 text-primary" /> Baú ({tableItems.length})
+            </Button>
+          )}
+          {isGM && (
             <Button size="sm" onClick={() => setCreatingSession((v) => !v)}>
               <Plus className="h-4 w-4" /> Nova Sessão
             </Button>
@@ -606,12 +655,22 @@ function TableDetailPage() {
                         </p>
                       </div>
                     </div>
-                    <span className={cn(
-                      "text-[9px] uppercase font-bold px-1.5 py-0.5 rounded",
-                      char.alive === 1 ? "bg-primary/10 text-primary border border-primary/20" : "bg-destructive/10 text-destructive border border-destructive/20"
-                    )}>
-                      {char.alive === 1 ? "Vivo" : "Morto"}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-[10px] font-semibold cursor-pointer gap-1 border-primary/30 hover:bg-primary/10"
+                        onClick={() => setIsBackpackOpen(true)}
+                      >
+                        <Backpack className="h-3.5 w-3.5 text-primary" /> Mochila ({(inventoryByCharacter[char.id] ?? []).length})
+                      </Button>
+                      <span className={cn(
+                        "text-[9px] uppercase font-bold px-1.5 py-0.5 rounded",
+                        char.alive === 1 ? "bg-primary/10 text-primary border border-primary/20" : "bg-destructive/10 text-destructive border border-destructive/20"
+                      )}>
+                        {char.alive === 1 ? "Vivo" : "Morto"}
+                      </span>
+                    </div>
                   </div>
                 );
               })()}
@@ -839,155 +898,6 @@ function TableDetailPage() {
               )}
             </div>
           </div>
-
-          {/* GM Items Chest Panel (GM Only) */}
-          {isGM && (
-            <div className="space-y-4 border-t border-border pt-6">
-              <h2 className="font-display text-2xl flex items-center gap-2">
-                <Backpack className="h-5 w-5 text-primary" /> Baú de Itens da Mesa
-              </h2>
-
-              {/* Create Table Item Form */}
-              <Card className="p-4 bg-card/65 border-border space-y-3">
-                <h4 className="text-xs uppercase tracking-widest text-primary font-semibold">Criar Item da Mesa</h4>
-                <form onSubmit={handleCreateItem} className="space-y-3">
-                  <div>
-                    <Label htmlFor="itName" className="text-[10px] uppercase tracking-wider text-muted-foreground">Nome do Item</Label>
-                    <Input
-                      id="itName"
-                      value={newItemName}
-                      onChange={(e) => setNewItemName(e.target.value)}
-                      placeholder="Espada Rúnica, Poção de Mana..."
-                      className="h-8 text-xs"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="itDesc" className="text-[10px] uppercase tracking-wider text-muted-foreground">Descrição</Label>
-                    <Input
-                      id="itDesc"
-                      value={newItemDesc}
-                      onChange={(e) => setNewItemDesc(e.target.value)}
-                      placeholder="+2 de Dano Físico..."
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                  <ImageInput
-                    label="Imagem do Item (Arquivo do Computador ou URL)"
-                    value={newItemImageUrl}
-                    onChange={setNewItemImageUrl}
-                    placeholder="https://exemplo.com/item.jpg"
-                  />
-                  <div>
-                    <Label htmlFor="itWeight" className="text-[10px] uppercase tracking-wider text-muted-foreground">Peso Unitário (kg)</Label>
-                    <Input
-                      id="itWeight"
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      value={newItemWeight}
-                      onChange={(e) => setNewItemWeight(e.target.value)}
-                      className="h-8 text-xs font-mono"
-                      required
-                    />
-                  </div>
-                  <Button type="submit" size="sm" className="w-full h-8 text-xs font-semibold">
-                    <Plus className="h-3.5 w-3.5" /> Adicionar ao Baú
-                  </Button>
-                </form>
-              </Card>
-
-              {/* Items List */}
-              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin">
-                {tableItems.length === 0 ? (
-                  <div className="text-sm text-muted-foreground/60 text-center py-6 border border-dashed border-border rounded-lg">
-                    O baú está vazio. Crie itens acima.
-                  </div>
-                ) : (
-                  tableItems.map((it) => (
-                    <Card key={it.id} className="p-3 bg-card/40 border-border/80 flex flex-col gap-2 hover:bg-card/70 transition-all">
-                      <div className="flex items-start justify-between gap-2">
-                        <div
-                          onClick={() => setSelectedItemForModal({ ...it, quantity: (it as any).quantity || 1 })}
-                          className="flex items-center gap-2 min-w-0 cursor-pointer group flex-1"
-                          title="Clique para ver detalhes do item e compartilhar"
-                        >
-                          {it.image_url ? (
-                            <img src={resolveImageUrl(it.image_url)} alt={it.item_name} className="w-10 h-10 rounded object-cover border border-border shrink-0 bg-background" />
-                          ) : (
-                            <div className="w-10 h-10 rounded bg-primary/10 border border-primary/20 grid place-items-center shrink-0">
-                              <Backpack className="h-5 w-5 text-primary" />
-                            </div>
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <h5 className="font-semibold text-sm text-foreground truncate group-hover:text-primary transition-colors">{it.item_name}</h5>
-                            {it.description && (
-                              <p className="text-[11px] text-muted-foreground leading-snug mt-0.5 truncate">{it.description}</p>
-                            )}
-                            <span className="text-[9px] font-mono bg-secondary px-1.5 py-0.5 rounded text-muted-foreground mt-1 inline-block">
-                              Peso: {it.weight} kg
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => handleShareItemToChat(it)}
-                            className="h-7 w-7 text-muted-foreground hover:text-purple-400 shrink-0"
-                            title="Compartilhar no Chat da Mesa"
-                          >
-                            <Share2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => handleDeleteItem(it.id)}
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-                            title="Excluir Item do Baú"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-
-                      {/* Assignment Row */}
-                      <div className="mt-1 flex items-center gap-1.5 border-t border-border/30 pt-2">
-                        <select
-                          value={assignCharId[it.id] ?? ""}
-                          onChange={(e) => setAssignCharId((prev) => ({ ...prev, [it.id]: e.target.value }))}
-                          className="bg-background text-foreground border border-border rounded px-2 py-0.5 text-xs focus:outline-none flex-1 h-7"
-                        >
-                          <option value="">Atribuir a...</option>
-                          {characters.filter(c => c.alive === 1).map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={assignQty[it.id] ?? "1"}
-                          onChange={(e) => setAssignQty((prev) => ({ ...prev, [it.id]: e.target.value }))}
-                          className="w-12 h-7 px-1 text-center text-xs font-mono"
-                        />
-                        <Button
-                          size="sm"
-                          onClick={() => handleAssignItem(it.id)}
-                          className="h-7 text-[10px] px-2 font-semibold"
-                          disabled={!assignCharId[it.id]}
-                        >
-                          Enviar
-                        </Button>
-                      </div>
-                    </Card>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Right Column: Sessions & Event Logs */}
@@ -1216,62 +1126,6 @@ function TableDetailPage() {
                   </div>
                 </div>
               </Card>
-
-              {/* Character Equipment Quick Compartment (under dice roller layout) */}
-              {selectedCharacterId && (() => {
-                const myActiveChar = characters.find((c) => c.id === selectedCharacterId);
-                const charItems = inventoryByCharacter[selectedCharacterId] ?? [];
-                return (
-                  <Card className="p-4 bg-card/65 border-border space-y-3 mt-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Backpack className="h-4 w-4 text-primary" />
-                        <h4 className="text-xs uppercase tracking-wider font-semibold text-foreground">
-                          Mochila de {myActiveChar?.name || "Herói"} ({charItems.length} itens)
-                        </h4>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground font-mono">Clique no item para detalhes</span>
-                    </div>
-
-                    {charItems.length === 0 ? (
-                      <p className="text-xs text-muted-foreground italic text-center py-3 border border-dashed border-border/60 rounded-lg">
-                        Sua mochila está vazia no momento.
-                      </p>
-                    ) : (
-                      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                        {charItems.map((it) => (
-                          <button
-                            key={it.id}
-                            type="button"
-                            onClick={() => setSelectedItemForModal(it)}
-                            className="flex items-center gap-2.5 p-2 rounded-lg border border-border/80 bg-secondary/30 hover:bg-secondary/70 hover:border-primary/50 transition-all shrink-0 cursor-pointer text-left group min-w-[130px] max-w-[190px]"
-                          >
-                            {it.image_url ? (
-                              <img
-                                src={resolveImageUrl(it.image_url)}
-                                alt={it.item_name}
-                                className="w-8 h-8 rounded object-cover border border-border shrink-0 bg-background"
-                              />
-                            ) : (
-                              <div className="w-8 h-8 rounded bg-primary/10 border border-primary/20 grid place-items-center shrink-0">
-                                <Backpack className="h-4 w-4 text-primary" />
-                              </div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <div className="font-semibold text-xs text-foreground truncate group-hover:text-primary transition-colors">
-                                {it.item_name}
-                              </div>
-                              <div className="text-[9px] text-muted-foreground font-mono">
-                                Qtd: {it.quantity} • {it.weight}kg
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </Card>
-                );
-              })()}
             </div>
           ) : (
             <div className="text-center py-16 border border-dashed border-border rounded-xl bg-card/25">
@@ -1361,20 +1215,20 @@ function TableDetailPage() {
                             type="number"
                             value={modalHpChange}
                             onChange={(e) => setModalHpChange(e.target.value)}
-                            className="w-14 h-7 text-center text-xs font-mono"
+                            className="w-24 h-8 px-2 text-center text-xs font-mono"
                           />
                           <Button
                             size="sm"
                             variant="destructive"
                             onClick={() => handleCharacterHpChange(modalChar, -parseInt(modalHpChange, 10))}
-                            className="h-7 text-[10px] px-2 font-semibold"
+                            className="h-8 text-xs px-2.5 font-semibold cursor-pointer"
                           >
                             Dano
                           </Button>
                           <Button
                             size="sm"
                             onClick={() => handleCharacterHpChange(modalChar, parseInt(modalHpChange, 10))}
-                            className="h-7 text-[10px] px-2 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
+                            className="h-8 text-xs px-2.5 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
                           >
                             Cura
                           </Button>
@@ -1605,6 +1459,447 @@ function TableDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Floating Side Button & Sheet for Table Items Chest (GM Only) */}
+      {isGM && (
+        <Sheet open={isChestOpen} onOpenChange={setIsChestOpen}>
+          <SheetTrigger asChild>
+            <button
+              type="button"
+              className="fixed right-0 top-[38%] -translate-y-1/2 z-40 flex items-center gap-2.5 bg-card/90 hover:bg-card text-foreground border border-r-0 border-primary/50 hover:border-primary px-3 py-3.5 rounded-l-2xl shadow-2xl shadow-primary/20 backdrop-blur-md transition-all duration-300 group cursor-pointer"
+              title="Abrir Baú de Itens da Mesa"
+            >
+              <div className="relative flex items-center justify-center">
+                <ChestIcon className="h-6 w-6 text-primary group-hover:scale-110 transition-transform duration-200" />
+                {tableItems.length > 0 && (
+                  <span className="absolute -top-2.5 -right-2.5 bg-primary text-primary-foreground font-mono font-bold text-[10px] min-w-[18px] h-4 px-1 rounded-full flex items-center justify-center shadow-md">
+                    {tableItems.length}
+                  </span>
+                )}
+              </div>
+              <div className="hidden md:flex flex-col text-left pr-0.5">
+                <span className="text-[11px] font-display uppercase tracking-wider text-primary font-bold leading-none">
+                  Baú
+                </span>
+                <span className="text-[9px] text-muted-foreground leading-none mt-1">
+                  da Mesa
+                </span>
+              </div>
+            </button>
+          </SheetTrigger>
+
+          <SheetContent side="right" className="w-[95vw] sm:w-[460px] sm:max-w-lg bg-card/95 backdrop-blur-xl border-l border-border/80 p-6 flex flex-col h-full z-[60]">
+            <SheetHeader className="pb-4 border-b border-border space-y-1">
+              <SheetTitle className="font-display text-2xl flex items-center gap-2 text-foreground">
+                <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary">
+                  <ChestIcon className="h-5 w-5" />
+                </div>
+                Baú de Itens da Mesa
+              </SheetTitle>
+              <SheetDescription className="text-xs text-muted-foreground">
+                Gerencie os itens da mesa, atribua aos jogadores, compartilhe no chat ou crie novos itens.
+              </SheetDescription>
+            </SheetHeader>
+
+            <Tabs value={chestTab} onValueChange={(val) => setChestTab(val as "items" | "create")} className="flex-1 flex flex-col min-h-0 mt-4">
+              <TabsList className="grid grid-cols-2 bg-muted/60 p-1 rounded-lg">
+                <TabsTrigger value="items" className="text-xs font-semibold gap-1.5 cursor-pointer">
+                  <Package className="h-3.5 w-3.5" />
+                  Atribuir & Gerenciar
+                  {tableItems.length > 0 && (
+                    <span className="ml-1 bg-primary/20 text-primary text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold">
+                      {tableItems.length}
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="create" className="text-xs font-semibold gap-1.5 cursor-pointer">
+                  <Plus className="h-3.5 w-3.5" />
+                  Criar Item
+                </TabsTrigger>
+              </TabsList>
+
+              {/* Submenu 1: Gerenciar Itens */}
+              <TabsContent value="items" className="flex-1 flex flex-col min-h-0 space-y-3 mt-3">
+                {/* Search Bar */}
+                {tableItems.length > 0 && (
+                  <div className="relative shrink-0">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      type="text"
+                      placeholder="Pesquisar item por nome ou descrição..."
+                      value={chestSearchQuery}
+                      onChange={(e) => setChestSearchQuery(e.target.value)}
+                      className="pl-8 pr-8 h-8 text-xs bg-background/70 border-border focus:border-primary"
+                    />
+                    {chestSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setChestSearchQuery("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                        title="Limpar pesquisa"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Items List */}
+                <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 scrollbar-thin">
+                  {tableItems.length === 0 ? (
+                    <div className="text-sm text-muted-foreground/70 text-center py-12 px-4 border border-dashed border-border rounded-xl space-y-3">
+                      <ChestIcon className="h-10 w-10 text-muted-foreground/40 mx-auto" />
+                      <p className="font-medium text-foreground">O baú está vazio</p>
+                      <p className="text-xs">Alterne para a aba "Criar Item" para adicionar tesouros e equipamentos a esta mesa.</p>
+                    </div>
+                  ) : (() => {
+                    const filtered = tableItems.filter((it) => {
+                      if (!chestSearchQuery.trim()) return true;
+                      const q = chestSearchQuery.toLowerCase().trim();
+                      return (
+                        it.item_name.toLowerCase().includes(q) ||
+                        (it.description && it.description.toLowerCase().includes(q))
+                      );
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="text-xs text-muted-foreground text-center py-8 px-4 border border-dashed border-border rounded-xl">
+                          Nenhum item encontrado para "<span className="text-foreground font-semibold">{chestSearchQuery}</span>".
+                        </div>
+                      );
+                    }
+
+                    return filtered.map((it) => (
+                      <Card key={it.id} className="p-3 bg-card/60 border-border/80 flex flex-col gap-2 hover:bg-card/90 transition-all rounded-lg shadow-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <div
+                            onClick={() => setSelectedItemForModal({ ...it, quantity: (it as any).quantity || 1 })}
+                            className="flex items-center gap-2 min-w-0 cursor-pointer group flex-1"
+                            title="Clique para ver detalhes e a imagem do item"
+                          >
+                            <h5 className="font-semibold text-xs text-foreground truncate group-hover:text-primary transition-colors leading-tight">
+                              {it.item_name}
+                            </h5>
+                            <span className="text-[9px] font-mono bg-secondary/80 px-1.5 py-0.5 rounded text-muted-foreground shrink-0">
+                              {it.weight} kg
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleShareItemToChat(it)}
+                              className="h-7 w-7 text-muted-foreground hover:text-purple-400 hover:bg-purple-950/20 shrink-0 cursor-pointer"
+                              title="Compartilhar no Chat da Mesa"
+                            >
+                              <Share2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleDeleteItem(it.id)}
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 cursor-pointer"
+                              title="Excluir Item do Baú"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {it.description && (
+                          <p
+                            onClick={() => setSelectedItemForModal({ ...it, quantity: (it as any).quantity || 1 })}
+                            className="text-[11px] text-muted-foreground leading-tight cursor-pointer truncate"
+                            title={it.description}
+                          >
+                            {it.description}
+                          </p>
+                        )}
+
+                        {/* Assignment Row */}
+                        <div className="flex items-center gap-1.5 border-t border-border/30 pt-2 mt-0.5">
+                          <select
+                            value={assignCharId[it.id] ?? ""}
+                            onChange={(e) => setAssignCharId((prev) => ({ ...prev, [it.id]: e.target.value }))}
+                            className="bg-background text-foreground border border-border rounded px-2 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary flex-1 h-7"
+                          >
+                            <option value="">Atribuir a...</option>
+                            {characters.filter(c => c.alive === 1).map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={assignQty[it.id] ?? "1"}
+                            onChange={(e) => setAssignQty((prev) => ({ ...prev, [it.id]: e.target.value }))}
+                            className="w-12 h-7 px-1 text-center text-xs font-mono"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => handleAssignItem(it.id)}
+                            className="h-7 text-[10px] px-2.5 font-semibold shrink-0 cursor-pointer"
+                            disabled={!assignCharId[it.id]}
+                          >
+                            Atribuir
+                          </Button>
+                        </div>
+                      </Card>
+                    ));
+                  })()}
+                </div>
+              </TabsContent>
+
+              {/* Submenu 2: Criar Item */}
+              <TabsContent value="create" className="flex-1 overflow-y-auto pr-1 space-y-4 mt-4 scrollbar-thin">
+                <Card className="p-4 bg-card/60 border-border space-y-4 rounded-xl">
+                  <h4 className="text-xs uppercase tracking-widest text-primary font-semibold flex items-center gap-1.5">
+                    <Plus className="h-3.5 w-3.5" /> Novo Item para a Mesa
+                  </h4>
+                  <form onSubmit={handleCreateItem} className="space-y-3.5">
+                    <div>
+                      <Label htmlFor="itName" className="text-[10px] uppercase tracking-wider text-muted-foreground">Nome do Item</Label>
+                      <Input
+                        id="itName"
+                        value={newItemName}
+                        onChange={(e) => setNewItemName(e.target.value)}
+                        placeholder="Espada Rúnica, Poção de Mana..."
+                        className="h-9 text-xs mt-1"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="itDesc" className="text-[10px] uppercase tracking-wider text-muted-foreground">Descrição</Label>
+                      <Input
+                        id="itDesc"
+                        value={newItemDesc}
+                        onChange={(e) => setNewItemDesc(e.target.value)}
+                        placeholder="+2 de Dano Físico..."
+                        className="h-9 text-xs mt-1"
+                      />
+                    </div>
+                    <ImageInput
+                      label="Imagem do Item (Arquivo do Computador ou URL)"
+                      value={newItemImageUrl}
+                      onChange={setNewItemImageUrl}
+                      placeholder="https://exemplo.com/item.jpg"
+                    />
+                    <div>
+                      <Label htmlFor="itWeight" className="text-[10px] uppercase tracking-wider text-muted-foreground">Peso Unitário (kg)</Label>
+                      <Input
+                        id="itWeight"
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={newItemWeight}
+                        onChange={(e) => setNewItemWeight(e.target.value)}
+                        className="h-9 text-xs font-mono mt-1"
+                        required
+                      />
+                    </div>
+                    <Button type="submit" size="sm" className="w-full h-9 text-xs font-semibold gap-1.5 mt-2 cursor-pointer">
+                      <Plus className="h-4 w-4" /> Adicionar ao Baú
+                    </Button>
+                  </form>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </SheetContent>
+        </Sheet>
+      )}
+
+      {/* Floating Side Button & Sheet for Character Backpack (Everyone) */}
+      <Sheet open={isBackpackOpen} onOpenChange={setIsBackpackOpen}>
+        <SheetTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              "fixed right-0 z-40 flex items-center gap-2.5 bg-card/90 hover:bg-card text-foreground border border-r-0 border-primary/50 hover:border-primary px-3 py-3.5 rounded-l-2xl shadow-2xl shadow-primary/20 backdrop-blur-md transition-all duration-300 group cursor-pointer",
+              isGM ? "top-[58%] -translate-y-1/2" : "top-1/2 -translate-y-1/2"
+            )}
+            title="Abrir Mochila do Herói"
+          >
+            <div className="relative flex items-center justify-center">
+              <Backpack className="h-6 w-6 text-primary group-hover:scale-110 transition-transform duration-200" />
+              {selectedCharacterId && (inventoryByCharacter[selectedCharacterId] ?? []).length > 0 && (
+                <span className="absolute -top-2.5 -right-2.5 bg-primary text-primary-foreground font-mono font-bold text-[10px] min-w-[18px] h-4 px-1 rounded-full flex items-center justify-center shadow-md">
+                  {(inventoryByCharacter[selectedCharacterId] ?? []).length}
+                </span>
+              )}
+            </div>
+            <div className="hidden md:flex flex-col text-left pr-0.5">
+              <span className="text-[11px] font-display uppercase tracking-wider text-primary font-bold leading-none">
+                Mochila
+              </span>
+              <span className="text-[9px] text-muted-foreground leading-none mt-1">
+                do Herói
+              </span>
+            </div>
+          </button>
+        </SheetTrigger>
+
+        <SheetContent side="right" className="w-[95vw] sm:w-[460px] sm:max-w-lg bg-card/95 backdrop-blur-xl border-l border-border/80 p-6 flex flex-col h-full z-[60]">
+          <SheetHeader className="pb-4 border-b border-border space-y-1">
+            <SheetTitle className="font-display text-2xl flex items-center gap-2 text-foreground">
+              <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary">
+                <Backpack className="h-5 w-5" />
+              </div>
+              Mochila do Herói
+            </SheetTitle>
+            <SheetDescription className="text-xs text-muted-foreground">
+              Visualize seus equipamentos, compartilhe no chat ou remova itens que não precisa mais.
+            </SheetDescription>
+          </SheetHeader>
+
+          {/* Active Character Selector (if multiple characters exist for current user) */}
+          {myChars.length > 0 && (
+            <div className="mt-3 p-2.5 bg-muted/40 rounded-xl border border-border/60 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <User className="h-4 w-4 text-primary shrink-0" />
+                <span className="text-xs font-semibold text-foreground truncate">
+                  {myChars.find(c => c.id === selectedCharacterId)?.name || "Selecione o Herói"}
+                </span>
+              </div>
+              {myChars.length > 1 && (
+                <select
+                  value={selectedCharacterId ?? ""}
+                  onChange={(e) => {
+                    const cid = parseInt(e.target.value, 10);
+                    setSelectedCharacterId(cid);
+                    localStorage.setItem(`table_char_${tableId}`, String(cid));
+                    fetchInventory(cid);
+                  }}
+                  className="bg-background text-foreground border border-border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                >
+                  {myChars.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.classe})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
+          {!selectedCharacterId ? (
+            <div className="text-sm text-muted-foreground text-center py-12 px-4 border border-dashed border-border rounded-xl mt-4">
+              Nenhum personagem selecionado para esta mesa.
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col min-h-0 space-y-3 mt-4">
+              {/* Search Bar */}
+              {(inventoryByCharacter[selectedCharacterId] ?? []).length > 0 && (
+                <div className="relative shrink-0">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="text"
+                    placeholder="Pesquisar equipamento por nome ou descrição..."
+                    value={backpackSearchQuery}
+                    onChange={(e) => setBackpackSearchQuery(e.target.value)}
+                    className="pl-8 pr-8 h-8 text-xs bg-background/70 border-border focus:border-primary"
+                  />
+                  {backpackSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setBackpackSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                      title="Limpar pesquisa"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Items List */}
+              <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 scrollbar-thin">
+                {(inventoryByCharacter[selectedCharacterId] ?? []).length === 0 ? (
+                  <div className="text-sm text-muted-foreground/70 text-center py-12 px-4 border border-dashed border-border rounded-xl space-y-3">
+                    <Backpack className="h-10 w-10 text-muted-foreground/40 mx-auto" />
+                    <p className="font-medium text-foreground">Sua mochila está vazia</p>
+                    <p className="text-xs">O Mestre (GM) pode criar e atribuir novos itens a você pelo Baú da Mesa.</p>
+                  </div>
+                ) : (() => {
+                  const charItems = inventoryByCharacter[selectedCharacterId] ?? [];
+                  const filtered = charItems.filter((it) => {
+                    if (!backpackSearchQuery.trim()) return true;
+                    const q = backpackSearchQuery.toLowerCase().trim();
+                    return (
+                      it.item_name.toLowerCase().includes(q) ||
+                      (it.description && it.description.toLowerCase().includes(q))
+                    );
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="text-xs text-muted-foreground text-center py-8 px-4 border border-dashed border-border rounded-xl">
+                        Nenhum item encontrado para "<span className="text-foreground font-semibold">{backpackSearchQuery}</span>".
+                      </div>
+                    );
+                  }
+
+                  return filtered.map((it) => (
+                    <Card key={it.id} className="p-3 bg-card/60 border-border/80 flex flex-col gap-2 hover:bg-card/90 transition-all rounded-lg shadow-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <div
+                          onClick={() => setSelectedItemForModal(it)}
+                          className="flex items-center gap-2 min-w-0 cursor-pointer group flex-1"
+                          title="Clique para ver detalhes do item"
+                        >
+                          <h5 className="font-semibold text-xs text-foreground truncate group-hover:text-primary transition-colors leading-tight">
+                            {it.item_name}
+                          </h5>
+                          <span className="text-[9px] font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded font-bold shrink-0">
+                            x{it.quantity}
+                          </span>
+                          <span className="text-[9px] font-mono bg-secondary/80 px-1.5 py-0.5 rounded text-muted-foreground shrink-0">
+                            {((it.weight || 0) * (it.quantity || 1)).toFixed(1)} kg
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleShareItemToChat(it)}
+                            className="h-7 w-7 text-muted-foreground hover:text-purple-400 hover:bg-purple-950/20 shrink-0 cursor-pointer"
+                            title="Compartilhar no Chat da Mesa"
+                          >
+                            <Share2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleDeleteBackpackItem(it.id)}
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 cursor-pointer"
+                            title="Remover Item da Mochila"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      {it.description && (
+                        <p
+                          onClick={() => setSelectedItemForModal(it)}
+                          className="text-[11px] text-muted-foreground leading-tight cursor-pointer truncate"
+                          title={it.description}
+                        >
+                          {it.description}
+                        </p>
+                      )}
+                    </Card>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
