@@ -25,6 +25,7 @@ import {
 } from "@/lib/mock-data";
 import { useCharacters, resolveImageUrl } from "@/context/character-context";
 import { ImageInput } from "@/components/ui/image-input";
+import { SelectWithOther } from "@/components/ui/select-with-other";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/forge")({
@@ -211,20 +212,22 @@ function ForgePage() {
                   <Input type="number" value={age} onChange={(e) => setAge(e.target.value)} />
                 </Field>
                 <Field label="Raça">
-                  <Select value={race} onValueChange={setRace}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {RACES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <SelectWithOther
+                    value={race}
+                    onValueChange={setRace}
+                    options={RACES}
+                    placeholder="Selecione a Raça"
+                    customPlaceholder="Digite a raça (ex: Tiefling, Cyborg)..."
+                  />
                 </Field>
                 <Field label="Classe">
-                  <Select value={classe} onValueChange={setClasse}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <SelectWithOther
+                    value={classe}
+                    onValueChange={setClasse}
+                    options={CLASSES}
+                    placeholder="Selecione a Classe"
+                    customPlaceholder="Digite a classe (ex: Necromante, Hacker)..."
+                  />
                 </Field>
                 <Field label="Região de Origem">
                   <Input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="As Terras Partidas" />
@@ -233,12 +236,13 @@ function ForgePage() {
                   <Input value={height} onChange={(e) => setHeight(e.target.value)} />
                 </Field>
                 <Field label="Porte">
-                  <Select value={physical} onValueChange={setPhysical}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {BUILDS.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <SelectWithOther
+                    value={physical}
+                    onValueChange={setPhysical}
+                    options={BUILDS}
+                    placeholder="Selecione o Porte"
+                    customPlaceholder="Digite o porte físico..."
+                  />
                 </Field>
                 <div className="sm:col-span-2">
                   <ImageInput

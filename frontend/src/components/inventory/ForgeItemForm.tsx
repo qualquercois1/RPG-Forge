@@ -12,9 +12,10 @@ import {
 } from "@/components/ui/select";
 import { RARITIES } from "@/lib/rarity";
 import type { ItemType, Rarity } from "@/lib/mock-data";
+import { SelectWithOther } from "@/components/ui/select-with-other";
 import { cn } from "@/lib/utils";
 
-const TYPES: ItemType[] = ["Arma", "Armadura", "Consumível", "Material", "Geral"];
+const TYPES: string[] = ["Arma", "Armadura", "Consumível", "Material", "Geral"];
 
 export function ForgeItemForm({
   onForge,
@@ -23,8 +24,8 @@ export function ForgeItemForm({
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [type, setType] = useState<ItemType>("Material");
-  const [rarity, setRarity] = useState<Rarity>("Comum");
+  const [type, setType] = useState<string>("Material");
+  const [rarity, setRarity] = useState<string>("Comum");
   const [weight, setWeight] = useState<string>("0.5");
   const [qty, setQty] = useState<string>("1");
 
@@ -32,8 +33,8 @@ export function ForgeItemForm({
     if (!name.trim()) return;
     onForge({
       name: name.trim(),
-      type,
-      rarity,
+      type: type as ItemType,
+      rarity: rarity as Rarity,
       weight: Math.max(0, parseFloat(weight) || 0),
       qty: Math.max(1, parseInt(qty) || 1),
     });
@@ -71,21 +72,23 @@ export function ForgeItemForm({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs uppercase tracking-widest">Tipo</Label>
-              <Select value={type} onValueChange={(v) => setType(v as ItemType)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <SelectWithOther
+                value={type}
+                onValueChange={setType}
+                options={TYPES}
+                placeholder="Selecione o Tipo"
+                customPlaceholder="Tipo personalizado..."
+              />
             </div>
             <div>
               <Label className="text-xs uppercase tracking-widest">Raridade</Label>
-              <Select value={rarity} onValueChange={(v) => setRarity(v as Rarity)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {RARITIES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <SelectWithOther
+                value={rarity}
+                onValueChange={setRarity}
+                options={RARITIES}
+                placeholder="Selecione a Raridade"
+                customPlaceholder="Raridade personalizada..."
+              />
             </div>
             <div>
               <Label className="text-xs uppercase tracking-widest">Peso (kg)</Label>

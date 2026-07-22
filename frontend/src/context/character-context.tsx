@@ -127,7 +127,7 @@ type Ctx = {
     }[];
   }) => Promise<{ success: boolean; error?: string }>;
   deleteCharacter: (id: number) => Promise<void>;
-  updateCharacter: (id: number, patch: { lore?: string; level?: number; hp?: number; max_hp?: number; alive?: number; image_url?: string; unallocated_points?: number }) => Promise<void>;
+  updateCharacter: (id: number, patch: { name?: string; race?: string; classe?: string; physical?: string; age?: number; height?: string; color?: string; region?: string; lore?: string; level?: number; hp?: number; max_hp?: number; alive?: number; image_url?: string; unallocated_points?: number }) => Promise<void>;
   addTable: (name: string) => Promise<{ success: boolean; table?: Table; error?: string }>;
   addInventoryItem: (charId: number, item_name: string, description: string, weight: number, quantity: number, imageUrl?: string) => Promise<{ success: boolean; error?: string }>;
   deleteInventoryItem: (charId: number, itemId: number) => Promise<void>;
@@ -765,7 +765,7 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const updateCharacter = useCallback(async (id: number, patch: { lore?: string; level?: number; hp?: number; max_hp?: number; alive?: number; image_url?: string; unallocated_points?: number }) => {
+  const updateCharacter = useCallback(async (id: number, patch: { name?: string; race?: string; classe?: string; physical?: string; age?: number; height?: string; color?: string; region?: string; lore?: string; level?: number; hp?: number; max_hp?: number; alive?: number; image_url?: string; unallocated_points?: number }) => {
     try {
       const res = await fetch(`${API_BASE}/characters/${id}`, {
         method: "PUT",

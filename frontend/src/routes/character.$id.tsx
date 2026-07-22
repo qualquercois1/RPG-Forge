@@ -1,11 +1,12 @@
 import { createFileRoute, Link, useNavigate, notFound } from "@tanstack/react-router";
-import { ArrowLeft, MapPin, Ruler, Cake, Palette, Scroll, Heart } from "lucide-react";
+import { ArrowLeft, MapPin, Ruler, Cake, Palette, Scroll, Heart, Pencil, Check, X } from "lucide-react";
 import { useCharacters, API_BASE, resolveImageUrl } from "@/context/character-context";
 import { ImageInput } from "@/components/ui/image-input";
+import { SelectWithOther } from "@/components/ui/select-with-other";
 import { AttributeBox } from "@/components/character/AttributeBox";
 import { AttributeRadar } from "@/components/character/AttributeRadar";
 import { InventoryCard } from "@/components/inventory/InventoryCard";
-import { ATTR_ORDER } from "@/lib/mock-data";
+import { ATTR_ORDER, RACES, CLASSES, BUILDS } from "@/lib/mock-data";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,45 @@ function CharacterSheet() {
   }, [user, loading, navigate]);
   const [lore, setLore] = useState("");
   const [hpChange, setHpChange] = useState("5");
+
+  const [isEditingIdentity, setIsEditingIdentity] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editRace, setEditRace] = useState("");
+  const [editClasse, setEditClasse] = useState("");
+  const [editPhysical, setEditPhysical] = useState("");
+  const [editRegion, setEditRegion] = useState("");
+  const [editAge, setEditAge] = useState("");
+  const [editHeight, setEditHeight] = useState("");
+  const [editColor, setEditColor] = useState("");
+
+  const startEditingIdentity = () => {
+    if (!character) return;
+    setEditName(character.name || "");
+    setEditRace(character.race || "");
+    setEditClasse(character.classe || "");
+    setEditPhysical(character.physical || "");
+    setEditRegion(character.region || "");
+    setEditAge(String(character.age || 0));
+    setEditHeight(character.height || "");
+    setEditColor(character.color || "");
+    setIsEditingIdentity(true);
+  };
+
+  const saveIdentity = async () => {
+    if (!character) return;
+    await updateCharacter(character.id, {
+      name: editName,
+      race: editRace,
+      classe: editClasse,
+      physical: editPhysical,
+      region: editRegion,
+      age: parseInt(editAge, 10) || 0,
+      height: editHeight,
+      color: editColor,
+    });
+    await fetchCharData();
+    setIsEditingIdentity(false);
+  };
 
   const fetchCharData = useCallback(async () => {
     try {
@@ -169,33 +209,113 @@ function CharacterSheet() {
         {/* Left column — Identidade & HP & Lore */}
         <div className="space-y-6">
           <Card className="p-6">
-            <div className="flex items-center gap-4 mb-4">
-              {character.image_url ? (
-                <img
-                  src={resolveImageUrl(character.image_url)}
-                  alt={character.name}
-                  className="w-16 h-16 rounded-lg object-cover border border-primary/40 shadow shrink-0"
-                />
-              ) : (
-                <div className="w-16 h-16 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center font-display text-2xl font-bold text-primary shrink-0">
-                  {character.name[0]}
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <div className="flex items-center gap-4 min-w-0">
+                {character.image_url ? (
+                  <img
+                    src={resolveImageUrl(character.image_url)}
+                    alt={character.name}
+                    className="w-16 h-16 rounded-lg object-cover border border-primary/40 shadow shrink-0"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center font-display text-2xl font-bold text-primary shrink-0">
+                    {character.name[0]}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="text-xs uppercase tracking-[0.3em] text-primary">Identidade</div>
+                  <h2 className="font-display text-3xl truncate">{character.name}</h2>
                 </div>
-              )}
-              <div>
-                <div className="text-xs uppercase tracking-[0.3em] text-primary">Identidade</div>
-                <h2 className="font-display text-3xl">{character.name}</h2>
               </div>
+              {canEditLore && !isEditingIdentity && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={startEditingIdentity}
+                  className="h-8 text-xs font-semibold flex items-center gap-1 border-primary/40 text-primary hover:bg-primary/10 cursor-pointer shrink-0"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Editar
+                </Button>
+              )}
             </div>
 
-            <dl className="grid grid-cols-1 gap-3 text-sm">
-              <Row icon={Scroll} label="Mesa" value={character.table_name} />
-              <Row icon={Scroll} label="Nível" value={String(character.level)} />
-              <Row icon={MapPin} label="Origem" value={character.region} />
-              <Row icon={Cake} label="Idade" value={`${character.age} anos`} />
-              <Row icon={Ruler} label="Altura" value={character.height} />
-              <Row icon={Palette} label="Porte" value={character.physical} />
-              <Row icon={Palette} label="Traços" value={character.color} />
-            </dl>
+            {isEditingIdentity ? (
+              <div className="space-y-3.5 border-t border-border pt-3 text-sm">
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Nome</label>
+                  <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-8 text-xs mt-1" />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Raça</label>
+                  <SelectWithOther
+                    value={editRace}
+                    onValueChange={setEditRace}
+                    options={RACES}
+                    placeholder="Selecione a Raça"
+                    customPlaceholder="Digite a raça (ex: Tiefling, Cyborg)..."
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Classe</label>
+                  <SelectWithOther
+                    value={editClasse}
+                    onValueChange={setEditClasse}
+                    options={CLASSES}
+                    placeholder="Selecione a Classe"
+                    customPlaceholder="Digite a classe (ex: Necromante, Hacker)..."
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Porte</label>
+                  <SelectWithOther
+                    value={editPhysical}
+                    onValueChange={setEditPhysical}
+                    options={BUILDS}
+                    placeholder="Selecione o Porte"
+                    customPlaceholder="Digite o porte físico..."
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Origem</label>
+                  <Input value={editRegion} onChange={(e) => setEditRegion(e.target.value)} className="h-8 text-xs mt-1" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Idade</label>
+                    <Input type="number" value={editAge} onChange={(e) => setEditAge(e.target.value)} className="h-8 text-xs mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Altura</label>
+                    <Input value={editHeight} onChange={(e) => setEditHeight(e.target.value)} className="h-8 text-xs mt-1" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Traços</label>
+                  <Input value={editColor} onChange={(e) => setEditColor(e.target.value)} className="h-8 text-xs mt-1" />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button size="sm" onClick={saveIdentity} className="h-8 text-xs font-semibold gap-1 flex-1 cursor-pointer">
+                    <Check className="h-3.5 w-3.5" /> Salvar
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setIsEditingIdentity(false)} className="h-8 text-xs font-semibold gap-1 cursor-pointer">
+                    <X className="h-3.5 w-3.5" /> Cancelar
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <dl className="grid grid-cols-1 gap-3 text-sm">
+                <Row icon={Scroll} label="Mesa" value={character.table_name} />
+                <Row icon={Scroll} label="Nível" value={String(character.level)} />
+                <Row icon={MapPin} label="Origem" value={character.region} />
+                <Row icon={Cake} label="Idade" value={`${character.age} anos`} />
+                <Row icon={Ruler} label="Altura" value={character.height} />
+                <Row icon={Palette} label="Porte" value={character.physical} />
+                <Row icon={Palette} label="Traços" value={character.color} />
+              </dl>
+            )}
 
             {canEditLore && (
               <div className="mt-4 border-t border-border pt-3">

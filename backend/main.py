@@ -91,6 +91,14 @@ class CharacterCreate(BaseModel):
         populate_by_name = True
 
 class CharacterUpdate(BaseModel):
+    name: Optional[str] = None
+    race: Optional[str] = None
+    classe: Optional[str] = None
+    physical: Optional[str] = None
+    age: Optional[int] = None
+    height: Optional[str] = None
+    color: Optional[str] = None
+    region: Optional[str] = None
     lore: Optional[str] = None
     level: Optional[int] = None
     hp: Optional[int] = None
@@ -357,6 +365,23 @@ def update_character(char_id: int, char_up: CharacterUpdate):
         if not row:
             raise HTTPException(status_code=404, detail="Personagem não encontrado.")
         old_level, old_unallocated = row[0], row[1]
+
+        if char_up.name is not None:
+            cursor.execute("UPDATE characters SET name = ? WHERE id = ?", (char_up.name, char_id))
+        if char_up.race is not None:
+            cursor.execute("UPDATE characters SET race = ? WHERE id = ?", (char_up.race, char_id))
+        if char_up.classe is not None:
+            cursor.execute("UPDATE characters SET classe = ? WHERE id = ?", (char_up.classe, char_id))
+        if char_up.physical is not None:
+            cursor.execute("UPDATE characters SET physical = ? WHERE id = ?", (char_up.physical, char_id))
+        if char_up.age is not None:
+            cursor.execute("UPDATE characters SET age = ? WHERE id = ?", (char_up.age, char_id))
+        if char_up.height is not None:
+            cursor.execute("UPDATE characters SET height = ? WHERE id = ?", (char_up.height, char_id))
+        if char_up.color is not None:
+            cursor.execute("UPDATE characters SET color = ? WHERE id = ?", (char_up.color, char_id))
+        if char_up.region is not None:
+            cursor.execute("UPDATE characters SET region = ? WHERE id = ?", (char_up.region, char_id))
 
         if char_up.lore is not None:
             cursor.execute("UPDATE characters SET lore = ? WHERE id = ?", (char_up.lore, char_id))
