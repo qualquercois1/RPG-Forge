@@ -96,7 +96,7 @@ export function ParallaxHero() {
       ref={sectionRef}
       className="relative w-full h-[88vh] min-h-[640px] max-h-[960px] overflow-hidden flex flex-col justify-between items-center text-center select-none"
     >
-      {/* CAMADA 1: FUNDO (Montanhas e Lua Neon) */}
+      {/* CAMADA 1: FUNDO (Montanhas e Lua Neon) - Centralizada para exibir a lua e as montanhas */}
       <div
         ref={layer1Ref}
         className="absolute inset-[-6%] w-[112%] h-[112%] pointer-events-none will-change-transform z-0"
@@ -104,12 +104,12 @@ export function ParallaxHero() {
         <img
           src={bgDragon1}
           alt="Cenário de Fundo - Céu e Montanhas"
-          className="w-full h-full object-cover object-bottom"
+          className="w-full h-full object-cover object-[center_35%]"
           loading="eager"
         />
       </div>
 
-      {/* CAMADA 2: MEIO (Castelo Rúnico e Dragão) */}
+      {/* CAMADA 2: MEIO (Castelo Rúnico e Dragão) - Redimensionado para não cobrir a lua */}
       <div
         ref={layer2Ref}
         className="absolute inset-[-6%] w-[112%] h-[112%] pointer-events-none will-change-transform z-[1]"
@@ -117,12 +117,12 @@ export function ParallaxHero() {
         <img
           src={bgDragon2}
           alt="Cenário do Meio - Castelo e Dragão"
-          className="w-full h-full object-cover object-bottom"
+          className="w-full h-full object-cover object-bottom scale-[0.66] sm:scale-[0.62] origin-bottom translate-y-[2%]"
           loading="eager"
         />
       </div>
 
-      {/* CAMADA 3: FRENTE (Árvores e Penhasco com Runas) */}
+      {/* CAMADA 3: FRENTE (Árvores e Penhasco com Runas) - Expandido para as bordas para abrir o centro */}
       <div
         ref={layer3Ref}
         className="absolute inset-[-6%] w-[112%] h-[112%] pointer-events-none will-change-transform z-[2]"
@@ -130,7 +130,7 @@ export function ParallaxHero() {
         <img
           src={bgDragon3}
           alt="Primeiro Plano - Floresta e Runas"
-          className="w-full h-full object-cover object-bottom"
+          className="w-full h-full object-cover object-bottom scale-[1.18] sm:scale-[1.25] origin-bottom translate-y-[8%]"
           loading="eager"
         />
       </div>
