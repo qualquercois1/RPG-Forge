@@ -5,12 +5,12 @@ import {
   Dices,
   Hammer,
   ArrowRight,
-  Sparkles,
   Scroll,
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ParallaxHero } from "@/components/landing/ParallaxHero";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -29,20 +29,19 @@ export const Route = createFileRoute("/")({
 function IndexPage() {
   return (
     <div className="relative min-h-screen flex flex-col justify-between overflow-x-hidden bg-background text-foreground selection:bg-primary/20 selection:text-primary">
-      {/* Luzes e Efeitos de Fundo (Cyber-Fantasy Glow) */}
+      {/* Luzes e Efeitos de Fundo Suaves */}
       <div
-        className="pointer-events-none absolute inset-0 -z-10 opacity-45"
+        className="pointer-events-none absolute inset-0 -z-10 opacity-30"
         style={{
           background:
-            "radial-gradient(750px circle at 15% 15%, oklch(0.92 0.24 125 / 0.14), transparent 50%), " +
-            "radial-gradient(650px circle at 85% 80%, oklch(0.4 0.15 260 / 0.3), transparent 50%), " +
-            "radial-gradient(500px circle at 50% 40%, oklch(0.92 0.24 125 / 0.05), transparent 60%)",
+            "radial-gradient(750px circle at 15% 15%, oklch(0.92 0.24 125 / 0.1), transparent 50%), " +
+            "radial-gradient(650px circle at 85% 80%, oklch(0.4 0.15 260 / 0.25), transparent 50%)",
         }}
       />
 
       {/* Grid Tático Sutil de Fundo */}
       <div
-        className="pointer-events-none absolute inset-0 -z-10 opacity-[0.035]"
+        className="pointer-events-none absolute inset-0 -z-10 opacity-[0.03]"
         style={{
           backgroundImage:
             "linear-gradient(to right, #ffffff 1px, transparent 1px), " +
@@ -52,7 +51,7 @@ function IndexPage() {
       />
 
       {/* Cabeçalho / Navbar */}
-      <header className="w-full border-b border-border/50 bg-background/60 backdrop-blur-md sticky top-0 z-50">
+      <header className="w-full border-b border-border/50 bg-background/70 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="grid place-items-center h-10 w-10 rounded-lg bg-primary/10 text-primary border border-primary/40 neon-border">
@@ -82,49 +81,11 @@ function IndexPage() {
         </div>
       </header>
 
-      {/* Conteúdo Principal (Hero + Pillars) */}
-      <main className="flex-1 flex flex-col items-center justify-center max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-20 w-full space-y-16 sm:space-y-24">
-        {/* Seção Hero */}
-        <section className="flex flex-col items-center text-center space-y-6 sm:space-y-8 max-w-3xl pt-4">
-          {/* Badge de Destaque */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-mono font-medium uppercase tracking-widest bg-primary/10 text-primary border border-primary/30 neon-border">
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>Sistema de Fichas & Gerenciamento de Campanhas</span>
-          </div>
+      {/* SESSÃO HERO COM BACKGROUND PARALLAX DE 3 CAMADAS */}
+      <ParallaxHero />
 
-          {/* Título Principal */}
-          <h1 className="font-display text-4xl sm:text-6xl md:text-7xl font-bold tracking-wide uppercase leading-[1.06]">
-            Forje seus Heróis.
-            <br />
-            <span className="neon-text">Domine o Destino.</span>
-          </h1>
-
-          {/* Descrição */}
-          <p className="text-base sm:text-lg text-muted-foreground max-w-2xl font-sans leading-relaxed">
-            O ambiente definitivo para jogadores e Mestres de RPG. Fichas de batalha interativas,
-            rolagem de dados em tempo real, forja de inventários com raridades épicas e controle
-            total das crônicas da sua mesa.
-          </p>
-
-          {/* Botão de Chamada para Ação (Leva para Login) */}
-          <div className="pt-2 flex flex-col items-center space-y-3">
-            <Link to="/login">
-              <Button
-                size="lg"
-                className="h-14 px-8 text-base sm:text-lg font-bold tracking-widest uppercase bg-primary text-primary-foreground hover:bg-primary/90 neon-border transition-all flex items-center gap-3 group shadow-[0_0_25px_oklch(0.92_0.24_125/0.35)]"
-              >
-                <Swords className="h-5 w-5 transition-transform group-hover:rotate-12" />
-                <span>Entrar no Sistema</span>
-                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-              </Button>
-            </Link>
-
-            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
-              Acesse sua conta para visualizar mesas e personagens
-            </span>
-          </div>
-        </section>
-
+      {/* SEÇÃO INFERIOR: ARSENAL, MECÂNICAS E CHAMADA FINAL */}
+      <main className="flex-1 flex flex-col items-center justify-center max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 w-full space-y-16">
         {/* Grade de Pilares do RPG (Cards) */}
         <section className="w-full space-y-6">
           <div className="flex items-center justify-between border-b border-border/50 pb-3">
