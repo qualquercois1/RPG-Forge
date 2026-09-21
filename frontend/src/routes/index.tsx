@@ -7,6 +7,7 @@ import {
   ArrowRight,
   Scroll,
   Zap,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -84,8 +85,51 @@ function IndexPage() {
       {/* SESSÃO HERO COM BACKGROUND PARALLAX DE 3 CAMADAS */}
       <ParallaxHero />
 
-      {/* SEÇÃO INFERIOR: ARSENAL, MECÂNICAS E CHAMADA FINAL */}
-      <main className="flex-1 flex flex-col items-center justify-center max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 w-full space-y-16">
+      {/* SEÇÃO INFERIOR: APRESENTAÇÃO, ARSENAL, MECÂNICAS E CHAMADA FINAL */}
+      <main
+        id="apresentacao"
+        className="flex-1 flex flex-col items-center justify-center max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20 w-full space-y-20 scroll-mt-20"
+      >
+        {/* Bloco de Apresentação & Entrada no Sistema (Acessível via Scroll) */}
+        <section className="flex flex-col items-center text-center space-y-6 sm:space-y-8 max-w-3xl pt-4">
+          {/* Badge de Destaque */}
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-mono font-medium uppercase tracking-widest bg-card/60 backdrop-blur-md text-primary border border-primary/30 neon-border shadow-lg">
+            <Sparkles className="h-3.5 w-3.5" />
+            <span>Sistema Cyber-Fantasy • Gerenciador de RPG</span>
+          </div>
+
+          {/* Título Principal */}
+          <h2 className="font-display text-4xl sm:text-6xl md:text-7xl font-bold tracking-wider uppercase leading-[1.05] text-foreground drop-shadow-[0_4px_24px_rgba(0,0,0,0.95)]">
+            Forje seus Heróis.
+            <br />
+            <span className="neon-text">Domine o Destino.</span>
+          </h2>
+
+          {/* Descrição Detalhada */}
+          <p className="text-base sm:text-lg text-muted-foreground/95 max-w-2xl font-sans leading-relaxed drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)] bg-background/40 backdrop-blur-sm p-4 rounded-xl border border-white/5">
+            Fichas interativas com atributos em tempo real, rolagem de dados integrada,
+            forja de inventários lendários e controle absoluto de campanhas para Mestres e Jogadores.
+          </p>
+
+          {/* Botão de Chamada para Ação */}
+          <div className="pt-2 flex flex-col items-center space-y-3">
+            <Link to="/login">
+              <Button
+                size="lg"
+                className="h-14 px-8 text-base sm:text-lg font-bold tracking-widest uppercase bg-primary text-primary-foreground hover:bg-primary/90 neon-border transition-all flex items-center gap-3 group shadow-[0_0_30px_oklch(0.92_0.24_125/0.45)]"
+              >
+                <Swords className="h-5 w-5 transition-transform group-hover:rotate-12" />
+                <span>Entrar no Sistema</span>
+                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+              </Button>
+            </Link>
+
+            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider drop-shadow-md">
+              Acesse sua conta para visualizar mesas e personagens
+            </span>
+          </div>
+        </section>
+
         {/* Grade de Pilares do RPG (Cards) */}
         <section className="w-full space-y-6">
           <div className="flex items-center justify-between border-b border-border/50 pb-3">

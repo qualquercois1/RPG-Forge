@@ -1,7 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Link } from "@tanstack/react-router";
-import { Swords, ArrowRight, Sparkles, ChevronDown } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ChevronDown } from "lucide-react";
 
 import bgDragon1 from "@/assets/BackgroundDragon1.jfif";
 import bgDragon2 from "@/assets/BackgroundDragon2.png";
@@ -94,49 +92,52 @@ export function ParallaxHero() {
   return (
     <section
       ref={sectionRef}
-      className="relative w-full h-[88vh] min-h-[640px] max-h-[960px] overflow-hidden flex flex-col justify-between items-center text-center select-none"
+      className="relative w-full h-[calc(100vh-4rem)] min-h-[620px] max-h-[960px] overflow-hidden flex flex-col justify-between items-center text-center select-none"
     >
-      {/* CAMADA 1: FUNDO (Montanhas e Lua Neon) - Centralizada para exibir a lua e as montanhas */}
-      <div
-        ref={layer1Ref}
-        className="absolute inset-[-6%] w-[112%] h-[112%] pointer-events-none will-change-transform z-0"
-      >
-        <img
-          src={bgDragon1}
-          alt="Cenário de Fundo - Céu e Montanhas"
-          className="w-full h-full object-cover object-[center_35%]"
-          loading="eager"
-        />
-      </div>
+      {/* CENÁRIO PARALLAX (DESLOCADO PARA BAIXO PARA CRIAR O ESPAÇO SUPERIOR) */}
+      <div className="absolute inset-x-0 bottom-0 top-14 sm:top-20 md:top-24 pointer-events-none">
+        {/* CAMADA 1: FUNDO (Montanhas e Lua Neon) */}
+        <div
+          ref={layer1Ref}
+          className="absolute inset-[-6%] w-[112%] h-[112%] pointer-events-none will-change-transform z-0"
+        >
+          <img
+            src={bgDragon1}
+            alt="Cenário de Fundo - Céu e Montanhas"
+            className="w-full h-full object-cover object-[center_35%]"
+            loading="eager"
+          />
+        </div>
 
-      {/* CAMADA 2: MEIO (Castelo Rúnico e Dragão) - Redimensionado para não cobrir a lua */}
-      <div
-        ref={layer2Ref}
-        className="absolute inset-[-6%] w-[112%] h-[112%] pointer-events-none will-change-transform z-[1]"
-      >
-        <img
-          src={bgDragon2}
-          alt="Cenário do Meio - Castelo e Dragão"
-          className="w-full h-full object-cover object-bottom scale-[0.66] sm:scale-[0.62] origin-bottom translate-y-[2%]"
-          loading="eager"
-        />
-      </div>
+        {/* CAMADA 2: MEIO (Castelo Rúnico e Dragão) - Sem corte superior e com a base elevada */}
+        <div
+          ref={layer2Ref}
+          className="absolute inset-[-6%] w-[112%] h-[112%] pointer-events-none will-change-transform z-[1]"
+        >
+          <img
+            src={bgDragon2}
+            alt="Cenário do Meio - Castelo e Dragão"
+            className="w-full h-full object-cover sm:object-contain object-bottom scale-[0.92] sm:scale-[0.86] origin-bottom -translate-y-[2%] sm:-translate-y-[3%]"
+            loading="eager"
+          />
+        </div>
 
-      {/* CAMADA 3: FRENTE (Árvores e Penhasco com Runas) - Expandido para as bordas para abrir o centro */}
-      <div
-        ref={layer3Ref}
-        className="absolute inset-[-6%] w-[112%] h-[112%] pointer-events-none will-change-transform z-[2]"
-      >
-        <img
-          src={bgDragon3}
-          alt="Primeiro Plano - Floresta e Runas"
-          className="w-full h-full object-cover object-bottom scale-[1.18] sm:scale-[1.25] origin-bottom translate-y-[8%]"
-          loading="eager"
-        />
+        {/* CAMADA 3: FRENTE (Árvores e Penhasco com Runas) */}
+        <div
+          ref={layer3Ref}
+          className="absolute inset-[-6%] w-[112%] h-[112%] pointer-events-none will-change-transform z-[2]"
+        >
+          <img
+            src={bgDragon3}
+            alt="Primeiro Plano - Floresta e Runas"
+            className="w-full h-full object-cover object-bottom scale-[1.18] sm:scale-[1.25] origin-bottom translate-y-[14%] sm:translate-y-[16%]"
+            loading="eager"
+          />
+        </div>
       </div>
 
       {/* GRADIENTES DE TRANSIÇÃO E ATMOSFERA */}
-      <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-background/90 via-background/40 to-transparent pointer-events-none z-[3]" />
+      <div className="absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-background/90 via-background/40 to-transparent pointer-events-none z-[3]" />
       <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-background via-background/75 to-transparent pointer-events-none z-[3]" />
 
       {/* SUTIL LUZ AMBIENTE NEON LIME NO CENTRO */}
@@ -148,51 +149,25 @@ export function ParallaxHero() {
         }}
       />
 
-      {/* CONTEÚDO PRINCIPAL (HERO FLUTUANTE SOBRE AS CAMADAS) */}
-      <div className="relative z-10 w-full max-w-4xl mx-auto px-4 sm:px-6 my-auto flex flex-col items-center space-y-6 pt-10">
-        {/* Badge de Destaque */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-mono font-medium uppercase tracking-widest bg-card/60 backdrop-blur-md text-primary border border-primary/30 neon-border shadow-lg">
-          <Sparkles className="h-3.5 w-3.5" />
-          <span>Sistema Cyber-Fantasy • Gerenciador de RPG</span>
-        </div>
-
-        {/* Título com Sombra de Profundidade */}
-        <h1 className="font-display text-4xl sm:text-6xl md:text-7xl font-bold tracking-wider uppercase leading-[1.05] text-foreground drop-shadow-[0_4px_24px_rgba(0,0,0,0.95)]">
-          Forje seus Heróis.
-          <br />
-          <span className="neon-text">Domine o Destino.</span>
+      {/* TÍTULO NO ESPAÇO SUPERIOR (VERDE LIMA COM NEON GLOW) */}
+      <div className="relative z-10 pt-5 sm:pt-7 md:pt-9 flex flex-col items-center select-none pointer-events-none">
+        <h1 className="font-display font-black text-3xl sm:text-5xl md:text-6xl tracking-[0.25em] sm:tracking-[0.3em] uppercase text-primary neon-text drop-shadow-[0_4px_24px_rgba(0,0,0,0.95)]">
+          FORGE
         </h1>
-
-        {/* Descrição */}
-        <p className="text-base sm:text-lg text-muted-foreground/95 max-w-2xl font-sans leading-relaxed drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)] bg-background/40 backdrop-blur-sm p-3 rounded-xl border border-white/5">
-          Fichas interativas com atributos em tempo real, rolagem de dados integrada,
-          forja de inventários lendários e controle absoluto de campanhas para Mestres e Jogadores.
-        </p>
-
-        {/* Botão de Chamada para Ação (Leva Somente para Login) */}
-        <div className="pt-2 flex flex-col items-center space-y-3">
-          <Link to="/login">
-            <Button
-              size="lg"
-              className="h-14 px-8 text-base sm:text-lg font-bold tracking-widest uppercase bg-primary text-primary-foreground hover:bg-primary/90 neon-border transition-all flex items-center gap-3 group shadow-[0_0_30px_oklch(0.92_0.24_125/0.45)]"
-            >
-              <Swords className="h-5 w-5 transition-transform group-hover:rotate-12" />
-              <span>Entrar no Sistema</span>
-              <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-            </Button>
-          </Link>
-
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider drop-shadow-md">
-            Acesse sua conta para visualizar mesas e personagens
-          </span>
-        </div>
       </div>
 
       {/* INDICADOR INFERIOR DE SCROLL */}
-      <div className="relative z-10 mb-4 flex flex-col items-center gap-1 text-[11px] font-mono text-muted-foreground uppercase tracking-widest animate-pulse">
-        <span>Role para explorar as mecânicas</span>
+      <a
+        href="#apresentacao"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById("apresentacao")?.scrollIntoView({ behavior: "smooth" });
+        }}
+        className="relative z-10 mb-4 sm:mb-6 flex flex-col items-center gap-1.5 text-[11px] font-mono text-muted-foreground hover:text-foreground uppercase tracking-widest animate-pulse transition-colors pointer-events-auto cursor-pointer"
+      >
+        <span>Role para explorar</span>
         <ChevronDown className="h-4 w-4 text-primary" />
-      </div>
+      </a>
     </section>
   );
 }
