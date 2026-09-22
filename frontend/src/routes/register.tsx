@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Swords } from "lucide-react";
+import { Swords, ArrowLeft } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,14 +67,31 @@ import { useCharacters, API_BASE } from "@/context/character-context";
         }}
       />
 
+      {/* Botão para voltar ao menu inicial */}
+      <div className="absolute top-6 left-6 z-20">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-mono uppercase tracking-wider text-muted-foreground hover:text-foreground bg-card/60 hover:bg-card/90 border border-border/50 backdrop-blur-sm transition-all hover:border-primary/40 group shadow-sm"
+        >
+          <ArrowLeft className="h-4 w-4 text-primary transition-transform group-hover:-translate-x-1" />
+          <span>Menu Inicial</span>
+        </Link>
+      </div>
+
       <Card className="w-full max-w-sm p-8 bg-card/80 backdrop-blur border-border neon-border">
         <div className="flex flex-col items-center text-center mb-6">
-          <div className="grid place-items-center h-14 w-14 rounded-xl bg-primary/10 text-primary border border-primary/40 neon-border">
-            <Swords className="h-7 w-7" />
-          </div>
-          <h1 className="mt-4 font-display text-3xl tracking-wide">
-            FORJA<span className="text-primary">.</span>
-          </h1>
+          <Link
+            to="/"
+            title="Ir para o menu inicial"
+            className="group flex flex-col items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl p-1 transition-transform hover:scale-105"
+          >
+            <div className="grid place-items-center h-14 w-14 rounded-xl bg-primary/10 text-primary border border-primary/40 neon-border group-hover:border-primary group-hover:bg-primary/20 transition-all">
+              <Swords className="h-7 w-7" />
+            </div>
+            <h1 className="mt-4 font-display text-3xl tracking-wide">
+              FORJA<span className="text-primary">.</span>
+            </h1>
+          </Link>
           <p className="text-sm text-muted-foreground mt-1">
             Junte-se à guilda de heróis.
           </p>

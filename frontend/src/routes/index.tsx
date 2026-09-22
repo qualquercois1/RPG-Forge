@@ -54,8 +54,11 @@ function IndexPage() {
       {/* Cabeçalho / Navbar */}
       <header className="w-full border-b border-border/50 bg-background/70 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="grid place-items-center h-10 w-10 rounded-lg bg-primary/10 text-primary border border-primary/40 neon-border">
+          <Link
+            to="/"
+            className="flex items-center gap-3 group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg"
+          >
+            <div className="grid place-items-center h-10 w-10 rounded-lg bg-primary/10 text-primary border border-primary/40 neon-border group-hover:bg-primary/20 group-hover:border-primary transition-all">
               <Swords className="h-5 w-5" />
             </div>
             <div className="flex flex-col">
@@ -66,7 +69,7 @@ function IndexPage() {
                 CYBER-FANTASY RPG
               </span>
             </div>
-          </div>
+          </Link>
 
           <Link to="/login">
             <Button
@@ -249,10 +252,10 @@ function IndexPage() {
       {/* Rodapé Estilizado */}
       <footer className="w-full border-t border-border/40 py-6 bg-background/80 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-muted-foreground">
-          <div className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
             <span className="text-primary font-bold">FORJA.</span>
             <span>CYBER-FANTASY RPG MANAGER</span>
-          </div>
+          </Link>
 
           <div className="flex items-center gap-4">
             <Link to="/login" className="hover:text-primary transition-colors">
